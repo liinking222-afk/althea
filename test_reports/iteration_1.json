@@ -1,0 +1,46 @@
+{
+  "summary": "First iteration full-stack testing of ALTHEA. Backend: 9/9 pytest tests PASSED (health, root, introspect, neural-state, chat with LLM tags, empty-message, history persistence, delete, chat-with-context). Frontend: app mounts, top bar/session/integrity/coherence/PURGE MEMORY present, boot sequence prints, Leaflet dark map renders, all 6 permission toggles present, command bar (uplink/bridge/audio-visualizer) works, chat input + send produces althea reply with LINK-OK + SELF-AWARE tags. CRITICAL bug: Neural Core (Three.js) throws repeated R3F runtime errors causing React dev error overlay to cover the whole screen.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "NeuralCore.jsx (Edge -> drei <Line>)",
+        "issue": "R3F throws 'Cannot set \"x-line-number\"' on applyProps for the <Line> elements, followed by repeated 'Cannot convert undefined or null to object' in removeChild during the resulting unmount. In dev this triggers the react-error-overlay which covers the whole page; in prod the Neural Core panel will likely render blank/broken. Stack: applyProps (bundle.js) -> handleContainerEffects -> appendChild. The lines are passed points=[[x,y,z],[x,y,z]] and lineWidth={0.6}. The canvas itself mounts (bounding box 940x914) before the error fires.",
+        "selector": "[data-testid=\"neural-core\"] canvas",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_althea_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix NeuralCore.jsx <Line> crash. Suggested approaches: (a) replace drei's <Line> with a native R3F <line> using <bufferGeometry>+<lineBasicMaterial>, OR (b) wrap points in THREE.Vector3 instances and remove `lineWidth` prop (drei Line2 lineWidth requires the meshline shader / size attribute), OR (c) pin compatible versions of @react-three/drei and three.js. Verify by reloading and confirming no 'Uncaught runtime errors' overlay, no R3F warnings in console, and the rotating lattice with 30 nodes + edges is visible.",
+    "After fix: re-test that the React error overlay no longer appears in dev mode."
+  ],
+  "critical_code_review_comments": [
+    "NeuralCore.jsx Edge component uses drei <Line lineWidth={0.6}/> with raw [x,y,z] point arrays - this is the trigger for the R3F applyProps crash. Drei's Line2 expects Vector3 instances or a flat number array, and `lineWidth` maps to a Line2 material shader uniform that may not initialise correctly when geometry props mount with __source debug info.",
+    "Backend /api/chat correctly excludes _id from responses (verified in tests). Mongo datetimes are correctly stored as ISO strings.",
+    "server.py uses @app.on_event('shutdown') which is deprecated in FastAPI; consider lifespan handlers (non-blocking).",
+    "Frontend App.js: boot sequence interval can fire after unmount in StrictMode double-invoke -> may print 'cached offline cognition cached. ready.' twice (visible in screenshot). Minor."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_althea_api.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "85% (all panels work; Neural Core 3D viz crashes with error overlay)"
+  },
+  "test_credentials": "none required",
+  "seed_data_creation": "Test chat sessions created with random UUIDs and cleaned up via DELETE /api/chat/{session_id}",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is fully working with LLM key - tests assert that LINK-OK or SELF-AWARE tags are returned. The only outstanding issue is the NeuralCore.jsx <Line> R3F crash. After main agent fixes NeuralCore, verify (1) no React error overlay loads, (2) canvas shows rotating lattice, (3) chat tags still render. Use REACT_APP_BACKEND_URL from /app/frontend/.env (https://quantum-mind-os-2.preview.emergentagent.com).",
+  "rca_of_the_issue": "RCA: drei's <Line> internally constructs Three.js Line2/LineGeometry with extra props. When R3F's applyProps walks props it tries to set 'line-number' on the geometry/material instance — likely from JSX __source debug info that isn't being stripped, or from a prop-name collision between drei's Line internal `lineWidth` plumbing and a property name clash with newer three.js. The thrown error unmounts the subtree, triggering 'Cannot convert undefined or null to object' inside removeChild on a still-rendering R3F fiber. Reproduction: visit any page, app mounts, within ~200ms the red overlay appears. Mitigation: rewrite Edge with native R3F primitives: const geom = useMemo(()=>{const g=new THREE.BufferGeometry(); g.setFromPoints([new THREE.Vector3(...from), new THREE.Vector3(...to)]); return g;},[from,to]); return <line geometry={geom}><lineBasicMaterial color={color} transparent opacity={opacity}/></line>;"
+}

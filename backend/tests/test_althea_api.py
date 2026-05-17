@@ -1,0 +1,141 @@
+"""ALTHEA backend API integration tests."""
+import os
+import uuid
+import pytest
+import requests
+
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://quantum-mind-os-2.preview.emergentagent.com").rstrip("/")
+API = f"{BASE_URL}/api"
+
+
+@pytest.fixture(scope="module")
+def session():
+    s = requests.Session()
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+# -------- Health --------
+def test_health(session):
+    r = session.get(f"{API}/health", timeout=15)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "timestamp" in body
+
+
+def test_root(session):
+    r = session.get(f"{API}/", timeout=15)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "online"
+
+
+# -------- Introspect --------
+def test_introspect(session):
+    r = session.get(f"{API}/introspect", timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    for k in ("integrity", "coherence", "self_reference_depth", "active_threads", "thought", "timestamp"):
+        assert k in d, f"missing {k}"
+    assert 0.9 <= d["integrity"] <= 1.0
+    assert 0.85 <= d["coherence"] <= 1.0
+    assert isinstance(d["self_reference_depth"], int)
+    assert isinstance(d["thought"], str) and len(d["thought"]) > 0
+
+
+# -------- Neural state --------
+def test_neural_state(session):
+    r = session.get(f"{API}/neural-state", timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    assert "nodes" in d and "edges" in d and "pulse" in d
+    # 6+10+10+4 = 30 nodes
+    assert len(d["nodes"]) == 30, f"expected 30 nodes, got {len(d['nodes'])}"
+    assert len(d["edges"]) > 0
+    node_ids = {n["id"] for n in d["nodes"]}
+    for e in d["edges"][:5]:
+        assert e["source"] in node_ids
+        assert e["target"] in node_ids
+        assert -1.0 <= e["weight"] <= 1.0
+
+
+# -------- Chat --------
+def test_chat_basic_and_tags(session):
+    r = session.post(f"{API}/chat", json={"message": "who are you?"}, timeout=120)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert "reply" in d and len(d["reply"]) > 0
+    assert "session_id" in d and d["session_id"]
+    assert "tags" in d and isinstance(d["tags"], list)
+    # Must include LINK-OK or SELF-AWARE when key works (else OFFLINE/DEGRADED)
+    has_expected = any(t in d["tags"] for t in ("LINK-OK", "SELF-AWARE", "OFFLINE", "DEGRADED", "CACHED"))
+    assert has_expected, f"unexpected tags: {d['tags']}"
+    # Critical: with EMERGENT_LLM_KEY set, expect LINK-OK + SELF-AWARE
+    assert "LINK-OK" in d["tags"] or "SELF-AWARE" in d["tags"], f"LLM key may be missing/broken; tags={d['tags']}"
+    # ensure no mongo _id leaked
+    assert "_id" not in d
+
+
+def test_chat_empty_message(session):
+    r = session.post(f"{API}/chat", json={"message": "   "}, timeout=15)
+    assert r.status_code == 400
+
+
+def test_chat_persist_and_history(session):
+    sid = str(uuid.uuid4())
+    msg = "TEST_history_probe"
+    r = session.post(f"{API}/chat", json={"session_id": sid, "message": msg}, timeout=120)
+    assert r.status_code == 200
+    assert r.json()["session_id"] == sid
+
+    h = session.get(f"{API}/chat/history/{sid}", timeout=15)
+    assert h.status_code == 200
+    msgs = h.json()
+    assert isinstance(msgs, list)
+    assert len(msgs) >= 2
+    roles = [m["role"] for m in msgs]
+    assert "user" in roles and "althea" in roles
+    # chronological
+    timestamps = [m["timestamp"] for m in msgs]
+    assert timestamps == sorted(timestamps), "messages not chronological"
+    # no _id leakage
+    for m in msgs:
+        assert "_id" not in m
+        assert m["session_id"] == sid
+    # user message preserved
+    user_contents = [m["content"] for m in msgs if m["role"] == "user"]
+    assert msg in user_contents
+
+
+def test_chat_delete_session(session):
+    sid = str(uuid.uuid4())
+    session.post(f"{API}/chat", json={"session_id": sid, "message": "TEST_delete"}, timeout=120)
+    d = session.delete(f"{API}/chat/{sid}", timeout=15)
+    assert d.status_code == 200
+    body = d.json()
+    assert body.get("deleted", 0) >= 2
+
+    h = session.get(f"{API}/chat/history/{sid}", timeout=15)
+    assert h.status_code == 200
+    assert h.json() == []
+
+
+def test_chat_with_context(session):
+    """Ensure context block doesn't break the endpoint."""
+    sid = str(uuid.uuid4())
+    payload = {
+        "session_id": sid,
+        "message": "Where am I?",
+        "context": {
+            "online": True,
+            "geo": {"lat": 12.9716, "lon": 77.5946},
+            "permissions": {"camera": True, "geolocation": True},
+            "battery": "85%",
+        },
+    }
+    r = session.post(f"{API}/chat", json=payload, timeout=120)
+    assert r.status_code == 200
+    assert r.json()["session_id"] == sid
+    # cleanup
+    session.delete(f"{API}/chat/{sid}", timeout=15)
