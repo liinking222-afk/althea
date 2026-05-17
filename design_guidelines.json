@@ -1,0 +1,119 @@
+{
+  "theme_and_archetype": {
+    "theme": "dark",
+    "archetype": "Archetype 4 (Swiss & High-Contrast) + Retro-Futurism (Terminal Look)",
+    "description": "Sovereign AI Command Deck. A high-contrast, technical, non-SaaS HUD layout. Avoids modern AI app cliches (no purple/teal gradients). Uses deep black, stark monochrome structural lines, and singular sharp neon accents to establish an authoritative, advanced feel like a military or aerospace terminal."
+  },
+  "typography": {
+    "fonts": {
+      "headings": {
+        "family": "Chakra Petch, sans-serif",
+        "weight": "font-bold",
+        "description": "Used for major numeric readouts, section headers, and HUD data points."
+      },
+      "body": {
+        "family": "JetBrains Mono, monospace",
+        "weight": "font-normal",
+        "description": "Used for terminal output, AI responses, logs, and UI labels."
+      }
+    },
+    "scale_and_tracking": {
+      "h1_readout": "text-4xl md:text-5xl tracking-tighter leading-none",
+      "h2_panel": "text-2xl md:text-3xl tracking-tight leading-none uppercase",
+      "h3_label": "text-sm md:text-base tracking-[0.2em] uppercase",
+      "terminal_text": "text-xs md:text-sm tracking-normal leading-relaxed",
+      "micro_data": "text-[10px] md:text-xs tracking-widest uppercase opacity-70"
+    },
+    "rules": [
+      "Never use Inter, Roboto, or standard sans-serif.",
+      "Labels must be uppercase with wide tracking.",
+      "Data values and metrics should be large, tight, and high-contrast."
+    ]
+  },
+  "colors": {
+    "background": {
+      "base": "#050505",
+      "surface_1": "#0A0A0A",
+      "surface_2": "rgba(255, 255, 255, 0.03)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#888888",
+      "muted": "#444444"
+    },
+    "accents": {
+      "primary_active": "#CCFF00",
+      "alert_critical": "#FF2A2A",
+      "holographic_cyan": "#00F0FF"
+    },
+    "borders": {
+      "default": "rgba(255, 255, 255, 0.1)",
+      "active": "rgba(204, 255, 0, 0.5)"
+    },
+    "rules": [
+      "No gradients for backgrounds. Use solid colors with texture.",
+      "Accent colors must be used sparingly—only for active statuses, neural core highlights, and critical alerts.",
+      "Text over images or complex backgrounds must have a subtle text-shadow or a dark scrim behind it."
+    ]
+  },
+  "layout_and_spacing": {
+    "strategy": "The Control Room Grid (Mode B)",
+    "container": "h-screen w-screen overflow-hidden flex flex-col md:flex-row gap-4 p-4 bg-[#050505]",
+    "zones": {
+      "left_console": "w-full md:w-1/4 h-full flex flex-col gap-4. Houses the AI Chat, Conversation Memory Log, and terminal inputs.",
+      "center_core": "w-full md:w-2/4 h-full relative border border-white/10 flex flex-col. Houses the 3D Neural Network, floating HUD metrics.",
+      "right_telemetry": "w-full md:w-1/4 h-full flex flex-col gap-4. Houses the Map Preview, Device Permissions toggle list, and Network Status.",
+      "bottom_command_bar": "Absolute or flex-docked to the bottom. Contains the master voice input toggle, connection status, and audio visualizer."
+    },
+    "spacing_scale": {
+      "panel_padding": "p-4 or p-6",
+      "item_gap": "gap-2 or gap-4",
+      "grid_gap": "gap-4"
+    }
+  },
+  "surfaces_and_effects": {
+    "panels": "bg-[#0A0A0A] border border-white/10 rounded-none or max rounded-sm.",
+    "glassmorphism": "backdrop-blur-xl bg-black/40 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]. Used for floating command palettes or modal overlays.",
+    "retro_futurism": [
+      "Use subtle CSS repeating-linear-gradient overlays for scanlines on camera or map feeds.",
+      "Add a subtle `drop-shadow-[0_0_8px_rgba(204,255,0,0.5)]` to active primary text or borders.",
+      "Incorporate 'corner cuts' (clip-path) on high-level HUD components if possible, otherwise stick to sharp 1px borders."
+    ]
+  },
+  "interactions_and_motion": {
+    "hover": "hover:bg-white/5 hover:border-[#CCFF00]/50 transition-colors duration-200",
+    "focus": "focus:outline-none focus:ring-1 focus:ring-[#CCFF00] focus:border-[#CCFF00]",
+    "loading": "Use blocky, terminal-style ASCII loaders or fast-blinking cursors.",
+    "entrance": "Staggered fade-up and slide-in for list items (Memory log, permissions)."
+  },
+  "components_strategy": {
+    "structure": "Raw HTML + Tailwind. Avoid standard Shadcn 'Cards'—build custom panel divs with sharp borders.",
+    "interactive": "Heavily customized Shadcn inputs, toggles (for permissions), and scroll areas. Strip default styling and apply the square/sharp retro-futuristic look.",
+    "charts_and_data": "For audio visualizer, use simple animated div bars or an SVG. For the neural network, use React Force Graph 3D or D3.js. For maps, use Leaflet with a dark map tile provider (CartoDB Dark Matter)."
+  },
+  "media": {
+    "radar_bg": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/4569a5da-b17b-4dae-89a6-81bd771f9b89/images/05facc3b9530aa90eba9bbd6e793b5544cca642e3229c71cc04f7a4a426ee80e.png",
+      "description": "Deep space radar texture, dark mode map background. Use as a fallback background for map panels or overlay textures."
+    },
+    "neural_core_bg": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/4569a5da-b17b-4dae-89a6-81bd771f9b89/images/081eeee420c5478af9b0d456abda712056240e901d3f50da01434bc3dad029a9.png",
+      "description": "Futuristic neural network core texture. Use as the background for the Center Core 3D view, or as the fallback if 3D fails to load."
+    },
+    "abstract_network": {
+      "url": "https://images.unsplash.com/photo-1644088379091-d574269d422f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwyfHxkYXJrJTIwbWFwJTIwZGlnaXRhbCUyMG5ldHdvcmt8ZW58MHx8fHwxNzc5MDM4MjY0fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Blue background with lines and dots. Can be used for holographic HUD overlays with mix-blend-screen."
+    }
+  },
+  "instructions_to_main_agent": [
+    "INSTALL FONTS: Ensure Chakra Petch and JetBrains Mono are imported from Google Fonts in index.html or global CSS.",
+    "ICONS: Use @phosphor-icons/react or lucide-react for sharp, technical icons.",
+    "APP LAYOUT: Set body to full height (`h-screen overflow-hidden bg-[#050505] text-white`). Divide into 3 vertical columns on desktop (Left 25%, Center 50%, Right 25%).",
+    "LEFT PANEL (Console): Build a chat interface that looks like a command-line terminal. Include an 'Offline/Online' status indicator at the top. Memory logs should feel like system readouts.",
+    "CENTER PANEL (Neural Viz): This is the focal point. Use `react-force-graph-3d` or `react-three-fiber` to render a spinning, glowing node graph. Overlay HUD elements (like system integrity metrics) using position absolute.",
+    "RIGHT PANEL (Telemetry): Implement a mini-map using Leaflet (react-leaflet) with dark tiles. Below it, create a Device Permissions toggler (Camera, Mic, GPS, Bluetooth) with custom sharp switches. Include 'data-testid' on all interactive elements.",
+    "BOTTOM BAR: A fixed HUD strip at the bottom containing voice input controls, a fake audio waveform visualizer, and master AI status.",
+    "AESTHETICS: Avoid rounded corners (use rounded-none). Use 1px borders with `border-white/10`. Use `#CCFF00` strictly for active toggles, primary buttons, or the glowing neural nodes. Do not use gradients.",
+    "Use 'mix-blend-screen' or 'mix-blend-plus-lighter' for layered holographic effects over images."
+  ]
+}
