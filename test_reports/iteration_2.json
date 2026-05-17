@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 2 retest of ALTHEA after NeuralCore rewrite (vanilla three.js). Backend 9/9 pytest PASSED. Frontend: zero pageerrors, NO React error overlay, NeuralCore canvas (940x914) renders WebGL rotating lattice with the expected 30 nodes (layers 6-10-10-4) and edges (200), chat returns Althea reply tagged LINK-OK + SELF-AWARE, all 6 device-bridge toggles found (data-testid=permission-toggle-{camera|microphone|geolocation|bluetooth|usb|notifications}), Leaflet dark map renders, top-bar integrity/coherence values update (e.g. 93.45% / 90.14% -> 93.09% / 94.34% across polls), purge-memory button (data-testid=althea-reset-session-btn) clears chat (0 messages after).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Console warnings", "issues": ["THREE.Clock deprecation warning printed twice in console: 'THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.' - cosmetic, does not affect functionality."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_althea_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional: replace THREE.Clock with THREE.Timer in NeuralCore.jsx to silence deprecation warning.",
+    "Note for prompt-author: the actual device-bridge data-testid prefix is `permission-toggle-` (camera/microphone/geolocation/bluetooth/usb/notifications), not `perm-toggle-` as referenced in the review request - tests pass against the real testids."
+  ],
+  "critical_code_review_comments": [
+    "NeuralCore.jsx now uses pure THREE.js inside useEffect with a div ref - no R3F/drei, no JSX __source conflict; clean unmount cleanup disposes scene, geometries, materials, renderer, RAF and listeners.",
+    "Backend server.py still uses deprecated @app.on_event('shutdown') (FastAPI lifespan handler recommended) - non-blocking.",
+    "Boot sequence in App.js can log entries twice under React StrictMode double-mount - cosmetic.",
+    "All API responses correctly exclude mongo _id; chat tags assertion validated end-to-end with EMERGENT_LLM_KEY."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "none required",
+  "seed_data_creation": "Ephemeral chat sessions created with random UUIDs by pytest and DELETE-cleaned in test_chat_delete_session / test_chat_with_context.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "ALTHEA is fully green. NeuralCore is now plain three.js (mountRef + renderer.domElement) and stable. Backend EMERGENT_LLM_KEY working (LINK-OK/SELF-AWARE tags). data-testids: neural-core, neural-core-canvas, chat-input, chat-send-btn, althea-reset-session-btn, permissions-panel, permission-toggle-{key}. Backend at REACT_APP_BACKEND_URL=https://quantum-mind-os-2.preview.emergentagent.com.",
+  "rca_of_the_issue": "Previous R3F crash root-caused to visual-edits babel plugin injecting JSX __source/__self attributes that R3F applyProps tried to set on drei <Line> Line2 instances. Fix verified: NeuralCore rewritten to use plain three.js attached imperatively via useEffect; no JSX-on-three-objects involved, eliminating the applyProps path entirely. Confirmed via 0 pageerrors, no error-overlay iframes, and a visible animated lattice canvas."
+}

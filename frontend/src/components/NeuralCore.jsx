@@ -1,11 +1,9 @@
-import React, { useRef, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 const LAYERS = [6, 10, 10, 4];
-const ACCENT = "#CCFF00";
-const CYAN = "#00F0FF";
+const ACCENT = 0xccff00;
+const CYAN = 0x00f0ff;
 
 function buildGraph() {
     const nodes = [];
@@ -16,16 +14,13 @@ function buildGraph() {
     LAYERS.forEach((count, li) => {
         for (let i = 0; i < count; i++) {
             const y = -3 + (6 / Math.max(count - 1, 1)) * i;
-            const z = (Math.sin((i + li) * 1.7) * 1.2);
+            const z = Math.sin((i + li) * 1.7) * 1.2;
             nodes.push({
-                id: `${li}-${i}`,
-                position: [layerX[li], y, z],
-                layer: li,
+                position: new THREE.Vector3(layerX[li], y, z),
                 seed: Math.random(),
             });
         }
     });
-    // edges between adjacent layers
     let layerStart = 0;
     for (let li = 0; li < LAYERS.length - 1; li++) {
         const a = layerStart;
@@ -44,112 +39,194 @@ function buildGraph() {
     return { nodes, edges };
 }
 
-const Node = ({ position, seed }) => {
-    const ref = useRef();
-    useFrame((state) => {
-        const t = state.clock.elapsedTime;
-        const s = 0.16 + 0.06 * Math.sin(t * 1.8 + seed * 6);
-        if (ref.current) {
-            ref.current.scale.set(s * 4, s * 4, s * 4);
-            ref.current.material.emissiveIntensity =
-                0.7 + 0.5 * Math.sin(t * 2 + seed * 8);
-        }
-    });
-    return (
-        <mesh ref={ref} position={position}>
-            <sphereGeometry args={[0.1, 16, 16]} />
-            <meshStandardMaterial
-                color={ACCENT}
-                emissive={ACCENT}
-                emissiveIntensity={1.2}
-                toneMapped={false}
-            />
-        </mesh>
-    );
-};
-
-const Edge = ({ from, to, weight }) => {
-    const points = useMemo(() => [from, to], [from, to]);
-    return (
-        <Line
-            points={points}
-            color={weight > 0.5 ? ACCENT : CYAN}
-            opacity={0.15 + weight * 0.35}
-            transparent
-            lineWidth={0.6}
-        />
-    );
-};
-
-const RotatingGraph = () => {
-    const groupRef = useRef();
-    const { nodes, edges } = useMemo(() => buildGraph(), []);
-    useFrame((state) => {
-        if (groupRef.current) {
-            groupRef.current.rotation.y =
-                state.clock.elapsedTime * 0.18;
-            groupRef.current.rotation.x =
-                Math.sin(state.clock.elapsedTime * 0.3) * 0.1;
-        }
-    });
-    return (
-        <group ref={groupRef}>
-            {edges.map((e, i) => (
-                <Edge
-                    key={i}
-                    from={nodes[e.from].position}
-                    to={nodes[e.to].position}
-                    weight={e.weight}
-                />
-            ))}
-            {nodes.map((n) => (
-                <Node key={n.id} position={n.position} seed={n.seed} />
-            ))}
-            {/* central glow */}
-            <mesh>
-                <sphereGeometry args={[0.35, 32, 32]} />
-                <meshBasicMaterial
-                    color={ACCENT}
-                    transparent
-                    opacity={0.18}
-                />
-            </mesh>
-        </group>
-    );
-};
-
-const ParticleField = () => {
-    const ref = useRef();
-    const geom = useMemo(() => {
-        const g = new THREE.BufferGeometry();
-        const n = 400;
-        const pos = new Float32Array(n * 3);
-        for (let i = 0; i < n; i++) {
-            pos[i * 3] = (Math.random() - 0.5) * 30;
-            pos[i * 3 + 1] = (Math.random() - 0.5) * 18;
-            pos[i * 3 + 2] = (Math.random() - 0.5) * 30;
-        }
-        g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        return g;
-    }, []);
-    useFrame((state) => {
-        if (ref.current) {
-            ref.current.rotation.y = state.clock.elapsedTime * 0.02;
-        }
-    });
-    return (
-        <points ref={ref} geometry={geom}>
-            <pointsMaterial
-                size={0.04}
-                color="#ffffff"
-                transparent
-                opacity={0.35}
-            />
-        </points>
-    );
-};
-
 const NeuralCore = ({ introspection }) => {
+    const mountRef = useRef(null);
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        const mount = mountRef.current;
+        if (!mount) return;
+
+        const width = mount.clientWidth;
+        const height = mount.clientHeight;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            width / height,
+            0.1,
+            100,
+        );
+        camera.position.set(0, 0, 14);
+
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(width, height);
+        canvasRef.current = renderer.domElement;
+        mount.appendChild(renderer.domElement);
+
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const point = new THREE.PointLight(0xffffff, 1);
+        point.position.set(10, 10, 10);
+        scene.add(point);
+
+        // Build graph
+        const group = new THREE.Group();
+        scene.add(group);
+
+        const { nodes, edges } = buildGraph();
+
+        // Edges
+        edges.forEach((e) => {
+            const geom = new THREE.BufferGeometry().setFromPoints([
+                nodes[e.from].position,
+                nodes[e.to].position,
+            ]);
+            const mat = new THREE.LineBasicMaterial({
+                color: e.weight > 0.5 ? ACCENT : CYAN,
+                transparent: true,
+                opacity: 0.15 + e.weight * 0.35,
+            });
+            const line = new THREE.Line(geom, mat);
+            group.add(line);
+        });
+
+        // Nodes
+        const nodeMeshes = [];
+        const nodeGeom = new THREE.SphereGeometry(0.1, 16, 16);
+        nodes.forEach((n) => {
+            const mat = new THREE.MeshStandardMaterial({
+                color: ACCENT,
+                emissive: ACCENT,
+                emissiveIntensity: 1.2,
+                toneMapped: false,
+            });
+            const mesh = new THREE.Mesh(nodeGeom, mat);
+            mesh.position.copy(n.position);
+            mesh.userData.seed = n.seed;
+            group.add(mesh);
+            nodeMeshes.push(mesh);
+        });
+
+        // Central glow
+        const core = new THREE.Mesh(
+            new THREE.SphereGeometry(0.35, 32, 32),
+            new THREE.MeshBasicMaterial({
+                color: ACCENT,
+                transparent: true,
+                opacity: 0.18,
+            }),
+        );
+        group.add(core);
+
+        // Particle field
+        const particleGeom = new THREE.BufferGeometry();
+        const PCOUNT = 400;
+        const positions = new Float32Array(PCOUNT * 3);
+        for (let i = 0; i < PCOUNT; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 30;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 18;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
+        }
+        particleGeom.setAttribute(
+            "position",
+            new THREE.BufferAttribute(positions, 3),
+        );
+        const particles = new THREE.Points(
+            particleGeom,
+            new THREE.PointsMaterial({
+                size: 0.04,
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.35,
+            }),
+        );
+        scene.add(particles);
+
+        // Animate
+        const clock = new THREE.Clock();
+        let raf = 0;
+        let dragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let userYaw = 0;
+        let userPitch = 0;
+
+        const onDown = (e) => {
+            dragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        };
+        const onUp = () => {
+            dragging = false;
+        };
+        const onMove = (e) => {
+            if (!dragging) return;
+            userYaw += (e.clientX - lastX) * 0.005;
+            userPitch += (e.clientY - lastY) * 0.005;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        };
+
+        renderer.domElement.addEventListener("mousedown", onDown);
+        window.addEventListener("mouseup", onUp);
+        window.addEventListener("mousemove", onMove);
+
+        const animate = () => {
+            raf = requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            group.rotation.y = t * 0.18 + userYaw;
+            group.rotation.x = Math.sin(t * 0.3) * 0.1 + userPitch;
+            particles.rotation.y = t * 0.02;
+
+            nodeMeshes.forEach((m) => {
+                const seed = m.userData.seed;
+                const s = 0.16 + 0.06 * Math.sin(t * 1.8 + seed * 6);
+                m.scale.set(s * 4, s * 4, s * 4);
+                m.material.emissiveIntensity =
+                    0.7 + 0.5 * Math.sin(t * 2 + seed * 8);
+            });
+
+            renderer.render(scene, camera);
+        };
+        animate();
+
+        const onResize = () => {
+            const w = mount.clientWidth;
+            const h = mount.clientHeight;
+            renderer.setSize(w, h);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+        };
+        window.addEventListener("resize", onResize);
+
+        return () => {
+            cancelAnimationFrame(raf);
+            window.removeEventListener("resize", onResize);
+            window.removeEventListener("mouseup", onUp);
+            window.removeEventListener("mousemove", onMove);
+            renderer.domElement.removeEventListener("mousedown", onDown);
+            renderer.dispose();
+            if (mount.contains(renderer.domElement)) {
+                mount.removeChild(renderer.domElement);
+            }
+            scene.traverse((o) => {
+                if (o.geometry) o.geometry.dispose?.();
+                if (o.material) {
+                    if (Array.isArray(o.material))
+                        o.material.forEach((m) => m.dispose?.());
+                    else o.material.dispose?.();
+                }
+            });
+        };
+    }, []);
+
     return (
         <section
             className="panel cut h-full flex flex-col relative overflow-hidden grain scanlines"
@@ -167,32 +244,24 @@ const NeuralCore = ({ introspection }) => {
                 </span>
             </header>
 
-            <div className="flex-1 relative">
-                <Canvas
-                    camera={{ position: [0, 0, 14], fov: 50 }}
-                    gl={{ antialias: true, alpha: true }}
-                >
-                    <color attach="background" args={["#050505"]} />
-                    <ambientLight intensity={0.4} />
-                    <pointLight position={[10, 10, 10]} intensity={1} />
-                    <RotatingGraph />
-                    <ParticleField />
-                    <OrbitControls
-                        enableZoom={false}
-                        enablePan={false}
-                        autoRotate={false}
-                    />
-                </Canvas>
+            <div className="flex-1 relative min-h-0">
+                <div
+                    ref={mountRef}
+                    className="absolute inset-0"
+                    data-testid="neural-core-canvas"
+                />
 
                 {/* HUD overlays */}
                 <div className="pointer-events-none absolute inset-0">
-                    {/* corner ticks */}
                     <CornerTick className="top-3 left-3" />
                     <CornerTick className="top-3 right-3" flipX />
                     <CornerTick className="bottom-3 left-3" flipY />
-                    <CornerTick className="bottom-3 right-3" flipX flipY />
+                    <CornerTick
+                        className="bottom-3 right-3"
+                        flipX
+                        flipY
+                    />
 
-                    {/* introspection readout (bottom-left HUD) */}
                     <div className="absolute bottom-4 left-4 max-w-sm space-y-1 fade-up">
                         <div className="label text-[#CCFF00]">
                             self-observation
@@ -203,43 +272,45 @@ const NeuralCore = ({ introspection }) => {
                         </div>
                         <div className="flex gap-4 mt-2 text-[10px] text-[#888]">
                             <span>
-                                depth: <span className="text-[#CCFF00]">
-                                    {introspection?.self_reference_depth ?? "-"}
+                                depth:{" "}
+                                <span className="text-[#CCFF00]">
+                                    {introspection?.self_reference_depth ??
+                                        "-"}
                                 </span>
                             </span>
                             <span>
-                                threads: <span className="text-[#CCFF00]">
+                                threads:{" "}
+                                <span className="text-[#CCFF00]">
                                     {introspection?.active_threads ?? "-"}
                                 </span>
                             </span>
                             <span>
-                                pulse: <span className="text-[#CCFF00]">
+                                pulse:{" "}
+                                <span className="text-[#CCFF00]">
                                     {introspection
-                                        ? (introspection.coherence * 100).toFixed(
-                                              1,
-                                          ) + "%"
+                                        ? (
+                                              introspection.coherence * 100
+                                          ).toFixed(1) + "%"
                                         : "-"}
                                 </span>
                             </span>
                         </div>
                     </div>
 
-                    {/* right-side telemetry numbers */}
                     <div className="absolute top-4 right-4 text-right space-y-2">
                         <ReadoutBlock
                             label="lat. ms"
-                            value={(
-                                introspection
-                                    ? 12 + (1 - introspection.coherence) * 80
-                                    : 42
+                            value={(introspection
+                                ? 12 +
+                                  (1 - introspection.coherence) * 80
+                                : 42
                             ).toFixed(0)}
                         />
                         <ReadoutBlock
                             label="entropy"
-                            value={(
-                                introspection
-                                    ? 1 - introspection.integrity
-                                    : 0.07
+                            value={(introspection
+                                ? 1 - introspection.integrity
+                                : 0.07
                             ).toFixed(4)}
                         />
                     </div>
