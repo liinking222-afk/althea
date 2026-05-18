@@ -52,6 +52,12 @@ async def fetch_youtube_title(url: str) -> Optional[str]:
     return None
 
 
+async def next_node_id(db) -> str:
+    """Sequential NODE-XXXX id. Shared by routers/observe.py and routers/lattice.py."""
+    count = await db.althea_nodes.count_documents({})
+    return f"NODE-{count:04d}"
+
+
 def semantic_recall(query: str, docs: List[dict], limit: int = 25) -> List[dict]:
     """
     Hybrid TF-IDF cosine recall:

@@ -18,16 +18,11 @@ from models import (
     PerceptionRequest,
     PeripheralLink,
 )
+from utils import next_node_id
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 router = APIRouter()
-
-
-# ------ Cognitive Nodes ------
-async def _next_node_id() -> str:
-    count = await db.althea_nodes.count_documents({})
-    return f"NODE-{count:04d}"
 
 
 @router.post("/lattice/nodes", response_model=CognitiveNode)
@@ -41,7 +36,7 @@ async def spawn_node(req: NodeCreate):
         )
         if not parent:
             raise HTTPException(status_code=404, detail="parent_not_found")
-    nid = await _next_node_id()
+    nid = await next_node_id(db)
     node = CognitiveNode(
         id=nid,
         activation=req.activation if req.activation is not None else 1.0,
@@ -138,7 +133,7 @@ async def autonomous_learn(req: LearnRequest):
             logging.exception("autonomous_learn failed")
 
     # Spawn a node carrying the learned pattern
-    nid = await _next_node_id()
+    nid = await next_node_id(db)
     label = (req.label or "stream").strip()
     node = CognitiveNode(
         id=nid,

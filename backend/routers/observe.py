@@ -7,16 +7,11 @@ from fastapi import APIRouter
 
 from core import db, EMERGENT_LLM_KEY
 from models import CognitiveNode, Memory, ObserveRequest, ObserveResponse, SuggestResponse
-from utils import fetch_youtube_title
+from utils import fetch_youtube_title, next_node_id
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 router = APIRouter()
-
-
-async def _next_node_id() -> str:
-    count = await db.althea_nodes.count_documents({})
-    return f"NODE-{count:04d}"
 
 
 @router.post("/observe", response_model=ObserveResponse)
@@ -72,7 +67,7 @@ async def observe(req: ObserveRequest):
     # reflection memory so the cognitive lattice grows with every URL change.
     if action == "watch" and url:
         try:
-            nid = await _next_node_id()
+            nid = await next_node_id(db)
             pattern_snippet = (interpretation or "").strip().split("\n")[0][:280]
             node = CognitiveNode(
                 id=nid,
