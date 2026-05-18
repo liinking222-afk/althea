@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 11 retest: confirmed the NeuralCore.jsx fix (destructured onLatticeNodeClick + onClickRef + useEffect sync) eliminates the ReferenceError. Canvas was clicked 96 times across multiple orbital radii with ZERO page errors, ZERO ReferenceError console messages, no runtime overlay, and no 'onClickRef is not defined' text anywhere. NETWORK tab smoke also passes: bridge fetch of example.com returns 200/'Example Domain' panel and the interaction graph SVG renders ALTHEA + 8 cognitive nodes (NODE-0000..0007) + OPTIC peripheral + 3 host nodes (example.com, www.youtube.com, en.wikipedia.org). Could not reliably land a raycaster hit on a cyan satellite via blind playwright clicks (rotation moves the targets), but per the review request that was explicitly acceptable — the priority of confirming the absence of the runtime error is met.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "click satellite -> MemoryDrawer opens",
+        "issue": "Could NOT verify the success path end-to-end because playwright mouse clicks did not land on any cyan satellite mesh in 96 attempts (orbital rotation + small mesh radius 0.14 in world units makes the raycaster target unreliable from blind pixel coordinates). The wiring is correct (no ReferenceError, callback would fire if a hit occurred) — verification of the happy path remains untested. Suggest a manual smoke or adding a dev-only debug key (e.g. press 'M' to pick a random latticeMesh and invoke onClickRef.current) to make this E2E-testable.",
+        "affected_selectors": ["[data-testid=neural-core-canvas]", "[data-testid=memory-drawer]", "[data-testid=memory-search-input]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: add a deterministic dev hook (e.g. window.__althea_clickFirstSatellite or a hotkey) so the click->MemoryDrawer success path can be E2E-tested with playwright without relying on pixel-perfect raycasts.",
+    "Optional (low priority, carryover from iter10): trim raw exception strings in /api/bridge/web HTTPException details; constrain network_graph tag iteration to exclude 'bridge'/'web'; sanitise NetworkScreen host-node data-testids that contain ':' and '.'; useMemo for NetworkScreen node positions."
+  ],
+  "critical_code_review_comments": [
+    "NeuralCore.jsx fix is exactly as recommended: prop destructured at line 44, useRef at line 47, sync useEffect at lines 50-52, click handler reads onClickRef.current. Three.js scene useEffect still has [] deps — correct, the ref pattern keeps the latest callback callable.",
+    "Lattice satellites are tiny (radius 0.14 world units) and orbit at radius 7.5–9.0 with continuous group rotation — hard to hit. Consider increasing hit radius (e.g. a transparent larger picking sphere as child of each visible sphere) to improve UX for human users too."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not retested per request)", "frontend": "ReferenceError fix: PASS 100%; NETWORK smoke: PASS 100%; click->drawer success path: UNVERIFIED (no satellite hit landed)"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Sent /spawn first thought through the chat-input terminal during the test. Previous iterations' bridge fetches (example.com, www.youtube.com, en.wikipedia.org) and OPTIC peripheral are still present.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The NeuralCore ReferenceError is fully fixed. If end-to-end verification of click->MemoryDrawer is required, ask the main agent to expose a deterministic test hook (e.g. window.__althea_pickFirstSatellite() that synthesises a hit on latticeMeshes[0] and calls onClickRef.current(latticeMeshes[0].userData)). NETWORK tab and bridge fetch are stable. Backend was not retested in this iteration; previous test file /app/backend/tests/test_web_bridge_iter10.py is still valid as a regression suite.",
+  "rca of the issue": "The iter10 ReferenceError (onClickRef is not defined) is RESOLVED in iter11. Verified by clicking the canvas 96 times across multiple orbital radii in the NEURAL tab — no PAGEERROR events, no ReferenceError console messages, no webpack dev-server overlay, and no error text in document body. The fix at NeuralCore.jsx lines 44-52 (destructure onLatticeNodeClick, declare onClickRef = useRef(onLatticeNodeClick), and the syncing useEffect) is exactly what iter10 recommended."
+}

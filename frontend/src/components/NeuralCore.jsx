@@ -41,10 +41,15 @@ function buildGraph() {
     return { nodes, edges };
 }
 
-const NeuralCore = ({ introspection, embed }) => {
+const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
     const mountRef = useRef(null);
     const canvasRef = useRef(null);
+    const onClickRef = useRef(onLatticeNodeClick);
     const [latticeCount, setLatticeCount] = React.useState(0);
+
+    useEffect(() => {
+        onClickRef.current = onLatticeNodeClick;
+    }, [onLatticeNodeClick]);
 
     useEffect(() => {
         const mount = mountRef.current;
