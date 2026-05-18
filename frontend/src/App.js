@@ -141,19 +141,25 @@ function App() {
     }, []);
 
     const requestGeo = useCallback(() => {
-        if (!("geolocation" in navigator)) return;
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                setGeo({
-                    lat: pos.coords.latitude,
-                    lon: pos.coords.longitude,
-                    acc: pos.coords.accuracy,
-                });
-                setPermissions((p) => ({ ...p, geolocation: true }));
-            },
-            () => setPermissions((p) => ({ ...p, geolocation: false })),
-            { enableHighAccuracy: true, timeout: 8000 },
-        );
+        if (!("geolocation" in navigator)) return Promise.resolve(false);
+        return new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    setGeo({
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude,
+                        acc: pos.coords.accuracy,
+                    });
+                    setPermissions((p) => ({ ...p, geolocation: true }));
+                    resolve(true);
+                },
+                () => {
+                    setPermissions((p) => ({ ...p, geolocation: false }));
+                    resolve(false);
+                },
+                { enableHighAccuracy: true, timeout: 8000 },
+            );
+        });
     }, []);
 
     const togglePermission = useCallback(
@@ -194,7 +200,11 @@ function App() {
                     s.getTracks().forEach((t) => t.stop());
                     setPermissions((p) => ({ ...p, microphone: true }));
                 } else if (key === "geolocation") {
-                    requestGeo();
+                    const granted = await requestGeo();
+                    if (!granted) {
+                        // never register peripheral on denial
+                        return;
+                    }
                 } else if (key === "bluetooth") {
                     if (!navigator.bluetooth)
                         throw new Error("Web Bluetooth unsupported");
