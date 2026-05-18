@@ -9,6 +9,7 @@ const CenterDeck = ({
     observationUrl,
     setObservationUrl,
     watchLog,
+    observationMeta,
 }) => {
     return (
         <section
@@ -55,6 +56,7 @@ const CenterDeck = ({
                             url={observationUrl}
                             setUrl={setObservationUrl}
                             watchLog={watchLog}
+                            meta={observationMeta}
                         />
                     </div>
                 )}

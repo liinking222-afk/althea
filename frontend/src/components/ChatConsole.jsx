@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "@/App";
 import { offlineReply } from "@/lib/offlineFallback";
+import { SYSTEM_CAPABILITIES } from "@/lib/systemMap";
 
 const ChatConsole = ({
     sessionId,
@@ -11,13 +12,34 @@ const ChatConsole = ({
     bootMessages,
     watchUrl,
     openMemory,
+    observation,
+    activeTab,
 }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [sending, setSending] = useState(false);
     const [listening, setListening] = useState(false);
+    const [speakOn, setSpeakOn] = useState(() => {
+        const v = localStorage.getItem("althea_tts");
+        return v === null ? true : v === "1";
+    });
     const scrollRef = useRef(null);
     const recogRef = useRef(null);
+
+    useEffect(() => {
+        localStorage.setItem("althea_tts", speakOn ? "1" : "0");
+    }, [speakOn]);
+
+    const speak = (text) => {
+        if (!speakOn || !("speechSynthesis" in window)) return;
+        const clean = text.replace(/\[[^\]]+\]/g, "").trim();
+        if (!clean) return;
+        const u = new SpeechSynthesisUtterance(clean);
+        u.rate = 1.05;
+        u.pitch = 0.9;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+    };
 
     // Load history once
     useEffect(() => {
@@ -147,6 +169,29 @@ const ChatConsole = ({
             } else if (cmd === "/stop-watch") {
                 watchUrl?.("");
                 pushSystem("[OPTICAL] viewport cleared.");
+            } else if (cmd === "/speak") {
+                const v = rest.toLowerCase();
+                if (v === "on" || v === "true" || v === "1") {
+                    setSpeakOn(true);
+                    pushSystem("[VOICE-OUT] enabled. I will speak my replies.");
+                } else if (v === "off" || v === "false" || v === "0") {
+                    setSpeakOn(false);
+                    speechSynthesis?.cancel?.();
+                    pushSystem("[VOICE-OUT] disabled. I will stay silent.");
+                } else {
+                    setSpeakOn((s) => !s);
+                    pushSystem(
+                        `[VOICE-OUT] ${!speakOn ? "enabled" : "disabled"}.`,
+                    );
+                }
+            } else if (cmd === "/capabilities" || cmd === "/system") {
+                const lines = SYSTEM_CAPABILITIES.map(
+                    (c, i) =>
+                        `${(i + 1).toString().padStart(2, "0")}. ${c.name}${c.testid ? " [" + c.testid + "]" : ""}\n     ${c.description}`,
+                );
+                pushSystem(
+                    `[SYSTEM-MAP ${SYSTEM_CAPABILITIES.length} subsystems]\n${lines.join("\n")}`,
+                );
             } else {
                 pushSystem(
                     `[ERR] unknown command: ${cmd}. try /help`,
@@ -197,7 +242,13 @@ const ChatConsole = ({
             const res = await axios.post(`${API}/chat`, {
                 session_id: sessionId,
                 message: text,
-                context: { online, permissions, geo },
+                context: {
+                    online,
+                    permissions,
+                    geo,
+                    observation: observation || null,
+                    active_tab: activeTab,
+                },
             });
             setMessages((m) => [
                 ...m,
@@ -209,16 +260,7 @@ const ChatConsole = ({
                     tags: res.data.tags,
                 },
             ]);
-            // speak if microphone permission active (voice mode)
-            if (permissions.microphone && "speechSynthesis" in window) {
-                const u = new SpeechSynthesisUtterance(
-                    res.data.reply.replace(/\[[^\]]+\]/g, ""),
-                );
-                u.rate = 1.05;
-                u.pitch = 0.9;
-                speechSynthesis.cancel();
-                speechSynthesis.speak(u);
-            }
+            speak(res.data.reply);
         } catch (e) {
             const reply = offlineReply(text);
             setMessages((m) => [
@@ -277,6 +319,18 @@ const ChatConsole = ({
                     </h2>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setSpeakOn((s) => !s)}
+                        data-testid="voice-output-toggle"
+                        title="toggle althea voice output"
+                        className={`heading text-[10px] uppercase tracking-widest px-2 py-1 border ${
+                            speakOn
+                                ? "border-[#CCFF00]/60 text-[#CCFF00] bg-[#CCFF00]/10"
+                                : "border-white/15 text-[#888] hover:text-white"
+                        }`}
+                    >
+                        {speakOn ? "voice on" : "voice off"}
+                    </button>
                     <button
                         onClick={openMemory}
                         data-testid="open-memory-btn"

@@ -37,14 +37,16 @@ function normalize(u) {
     return url;
 }
 
-const ObservationScreen = ({ url, setUrl, watchLog }) => {
+const ObservationScreen = ({ url, setUrl, watchLog, meta }) => {
     const [draft, setDraft] = useState(url || "");
     const [iframeKey, setIframeKey] = useState(0);
     const [blocked, setBlocked] = useState(false);
+    const [showInterpret, setShowInterpret] = useState(true);
 
     useEffect(() => {
         setDraft(url || "");
         setBlocked(false);
+        setShowInterpret(true);
         setIframeKey((k) => k + 1);
     }, [url]);
 
@@ -116,6 +118,37 @@ const ObservationScreen = ({ url, setUrl, watchLog }) => {
                                 observing
                             </span>
                         </div>
+                        {meta?.interpretation && showInterpret && (
+                            <div
+                                className="absolute bottom-3 left-3 right-3 max-w-2xl bg-black/75 backdrop-blur-sm border-l-2 border-[#CCFF00] p-3 fade-up"
+                                data-testid="observation-interpretation"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="label text-[#CCFF00] mb-1">
+                                            althea // observing
+                                            {meta.title && (
+                                                <span className="text-white/70 normal-case tracking-normal ml-2 truncate">
+                                                    "{meta.title}"
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[12px] text-white/90 leading-relaxed whitespace-pre-wrap">
+                                            {meta.interpretation}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() =>
+                                            setShowInterpret(false)
+                                        }
+                                        className="text-[#888] hover:text-white text-[10px] heading uppercase tracking-widest"
+                                        data-testid="observation-interpret-dismiss"
+                                    >
+                                        hide
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         {blocked && (
                             <div className="absolute inset-0 flex items-center justify-center text-center bg-black/80 px-6">
                                 <div>

@@ -8,6 +8,7 @@ import CenterDeck from "@/components/CenterDeck";
 import TelemetryPanel from "@/components/TelemetryPanel";
 import CommandBar from "@/components/CommandBar";
 import MemoryDrawer from "@/components/MemoryDrawer";
+import { SYSTEM_CAPABILITIES } from "@/lib/systemMap";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -38,13 +39,43 @@ function App() {
     const [watchLog, setWatchLog] = useState([]);
     const [memoryOpen, setMemoryOpen] = useState(false);
 
-    const watchUrl = useCallback((url) => {
-        setObservationUrl(url);
-        setCenterTab("observe");
-        setWatchLog((log) => {
-            const next = [url, ...log.filter((u) => u !== url)];
-            return next.slice(0, 12);
-        });
+    const watchUrl = useCallback(
+        async (url) => {
+            setObservationUrl(url);
+            if (url) setCenterTab("observe");
+            setWatchLog((log) => {
+                if (!url) return log;
+                const next = [url, ...log.filter((u) => u !== url)];
+                return next.slice(0, 12);
+            });
+            try {
+                const res = await axios.post(`${API}/observe`, {
+                    url,
+                    action: url ? "watch" : "stop",
+                    session_id: sessionId,
+                    source_tab: "observe",
+                });
+                setObservationMeta({
+                    url,
+                    title: res.data?.title || null,
+                    interpretation: res.data?.interpretation || "",
+                    timestamp: res.data?.timestamp,
+                });
+            } catch (_) {
+                setObservationMeta({ url, title: null, interpretation: "" });
+            }
+        },
+        [sessionId],
+    );
+
+    // Observation interpretation metadata (latest)
+    const [observationMeta, setObservationMeta] = useState(null);
+
+    // Bootstrap the system capability map into Althea's memory on first mount
+    useEffect(() => {
+        axios
+            .post(`${API}/system-map`, { capabilities: SYSTEM_CAPABILITIES })
+            .catch(() => {});
     }, []);
 
     // Online / offline detection
@@ -67,6 +98,7 @@ function App() {
             "[BOOT] mounting introspection daemon...",
             "[BOOT] verifying public GPS uplink (OpenStreetMap)...",
             "[BOOT] device-permission bridge armed...",
+            `[BOOT] indexing ${SYSTEM_CAPABILITIES.length} subsystems / controls into memory...`,
             "[BOOT] cached offline cognition cached. ready.",
             "[BOOT] ALTHEA is self-aware. operator detected.",
         ];
@@ -203,6 +235,8 @@ function App() {
                         bootMessages={bootMessages}
                         watchUrl={watchUrl}
                         openMemory={() => setMemoryOpen(true)}
+                        observation={observationMeta}
+                        activeTab={centerTab}
                     />
                 </div>
                 <div className="md:col-span-6 min-h-0">
@@ -211,18 +245,9 @@ function App() {
                         setTab={setCenterTab}
                         introspection={introspection}
                         observationUrl={observationUrl}
-                        setObservationUrl={(u) => {
-                            setObservationUrl(u);
-                            if (u)
-                                setWatchLog((log) => {
-                                    const next = [
-                                        u,
-                                        ...log.filter((x) => x !== u),
-                                    ];
-                                    return next.slice(0, 12);
-                                });
-                        }}
+                        setObservationUrl={watchUrl}
                         watchLog={watchLog}
+                        observationMeta={observationMeta}
                     />
                 </div>
                 <div className="md:col-span-3 min-h-0">

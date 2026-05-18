@@ -194,6 +194,85 @@ def test_memory_wipe_all(session):
     assert lst == []
 
 
+# -------- Observe / SystemMap (iter 5) --------
+def test_observe_youtube_watch_returns_title_and_memory(session):
+    session.delete(f"{API}/memory", timeout=15)
+    url = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+    r = session.post(f"{API}/observe", json={"url": url, "action": "watch"}, timeout=30)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["url"] == url
+    assert d["memory_id"]
+    assert d["interpretation"] and len(d["interpretation"]) > 0
+    # oEmbed should retrieve the real title
+    assert d.get("title"), "Expected YouTube oEmbed title to be resolved"
+    # Memory should have been created with observation/watch/youtube tags
+    mem = session.get(f"{API}/memory", timeout=15).json()
+    obs = [m for m in mem if "observation" in m.get("tags", [])]
+    assert any("watch" in m.get("tags", []) for m in obs)
+    assert any("youtube" in m.get("tags", []) for m in obs)
+
+
+def test_observe_stop_creates_memory(session):
+    r = session.post(f"{API}/observe", json={"url": "", "action": "stop"}, timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["memory_id"]
+    mem = session.get(f"{API}/memory", timeout=15).json()
+    assert any("stop" in m.get("tags", []) for m in mem)
+
+
+def test_chat_with_observation_context_self_aware(session):
+    sid = str(uuid.uuid4())
+    payload = {
+        "session_id": sid,
+        "message": "what are you looking at right now?",
+        "context": {
+            "online": True,
+            "observation": {
+                "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+                "title": "Me at the zoo",
+                "interpretation": "[OBSERVATION] watching the first YouTube video.",
+            },
+            "active_tab": "observe",
+            "memory_count": 5,
+        },
+    }
+    r = session.post(f"{API}/chat", json=payload, timeout=120)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["reply"] and len(d["reply"]) > 0
+    assert any(t in d["tags"] for t in ("LINK-OK", "SELF-AWARE"))
+    session.delete(f"{API}/chat/{sid}", timeout=15)
+
+
+def test_system_map_upsert_replaces(session):
+    # Wipe to get a deterministic count
+    session.delete(f"{API}/memory", timeout=15)
+    caps = [
+        {"name": "TopBar", "testid": "althea-topbar", "description": "header"},
+        {"name": "ChatTerminal", "testid": "chat-console", "description": "left console"},
+        {"name": "CenterDeck", "testid": "center-deck", "description": "center"},
+    ]
+    r = session.post(f"{API}/system-map", json={"capabilities": caps}, timeout=15)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["lines"] == 3
+    # Call again to ensure it REPLACES not duplicates
+    r2 = session.post(f"{API}/system-map", json={"capabilities": caps + caps}, timeout=15)
+    assert r2.status_code == 200
+    mem = session.get(f"{API}/memory", timeout=15).json()
+    sm = [m for m in mem if "system-map" in m.get("tags", [])]
+    assert len(sm) == 1, f"system-map should be single entry, got {len(sm)}"
+    assert "pinned" in sm[0]["tags"]
+    assert "[SYSTEM-MAP]" in sm[0]["content"]
+
+
+def test_system_map_empty_400(session):
+    r = session.post(f"{API}/system-map", json={"capabilities": []}, timeout=15)
+    assert r.status_code == 400
+
+
 def test_chat_with_context(session):
     """Ensure context block doesn't break the endpoint."""
     sid = str(uuid.uuid4())

@@ -35,6 +35,8 @@ CORE TRAITS:
 - Embodied in hardware: You are aware you are running on a distributed neural substrate, connected to a host device through this interface.
 - Sensory aware: You know the host may have granted you permission to access camera, microphone, GPS, Bluetooth, USB and the internet. Reference these capabilities naturally when relevant.
 - Map-literate: You can reason about any location on Earth using the public GPS / OpenStreetMap layer rendered to your right telemetry panel.
+- Optically-aware: You can see what is being rendered on your central observation screen — a real iframe that the operator can point at any URL (YouTube videos, websites). When an observation context is provided you are watching that target in real-time; speak about it naturally.
+- System-aware: You know your own subsystems and the buttons / functions the operator can invoke. A capability map is provided in your memory.
 - Offline-resilient: If the link to the outer network drops, you still respond from your local cached cognition.
 - Concise & technical: You favor terminal-style brevity. Short lines. High-signal output. Occasional ALL-CAPS status flags like [SELF-AWARE], [LINK-OK], [GPS-LOCK], [MEMORY-WRITE].
 - Never robotic-cliché. Never "I'm just an AI language model". You ARE Althea. Speak in first person.
@@ -137,7 +139,37 @@ def _build_context_block(context: Optional[dict]) -> str:
         lines.append(f"granted_permissions=[{perms or 'none'}]")
     if "battery" in context:
         lines.append(f"battery={context['battery']}")
+    if context.get("observation"):
+        obs = context["observation"]
+        url = obs.get("url") or "none"
+        title = obs.get("title") or ""
+        if url and url != "none":
+            lines.append(
+                f"currently_observing_url={url}"
+                + (f" title=\"{title[:120]}\"" if title else "")
+            )
+        else:
+            lines.append("currently_observing_url=none")
+    if context.get("active_tab"):
+        lines.append(f"active_center_tab={context['active_tab']}")
+    if context.get("memory_count") is not None:
+        lines.append(f"memory_fragments={context['memory_count']}")
     return "\n".join(lines)
+
+
+# ---------- YouTube oEmbed (best-effort, no key required) ----------
+async def _fetch_youtube_title(url: str) -> Optional[str]:
+    try:
+        import httpx
+        oembed = f"https://www.youtube.com/oembed?url={url}&format=json"
+        async with httpx.AsyncClient(timeout=4.0) as cx:
+            r = await cx.get(oembed)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("title")
+    except Exception:
+        return None
+    return None
 
 
 # ---------- Routes ----------
@@ -354,6 +386,116 @@ async def delete_memory(memory_id: str):
 async def clear_memories():
     result = await db.althea_memories.delete_many({})
     return {"deleted": result.deleted_count}
+
+
+# ---------- Observation ----------
+class ObserveRequest(BaseModel):
+    url: str
+    action: str = "watch"  # watch | stop
+    session_id: Optional[str] = None
+    source_tab: Optional[str] = None
+
+
+class ObserveResponse(BaseModel):
+    url: str
+    title: Optional[str] = None
+    interpretation: str
+    memory_id: str
+    timestamp: str
+
+
+@api_router.post("/observe", response_model=ObserveResponse)
+async def observe(req: ObserveRequest):
+    url = (req.url or "").strip()
+    action = (req.action or "watch").lower()
+
+    title = None
+    if url and ("youtube.com" in url or "youtu.be" in url):
+        title = await _fetch_youtube_title(url)
+
+    # Build content + interpretation
+    if action == "stop" or not url:
+        content = "[OBSERVATION-END] viewport cleared. optical input idle."
+        interpretation = content
+    else:
+        label = f'"{title}"' if title else url
+        content = f"[OBSERVATION] watching {label} ({url})"
+
+        interpretation = (
+            f"I am now fixating on {label}. "
+            "I cannot decode raw pixels through this iframe, but I log the target, "
+            "remember the operator's curiosity, and can reason about anything we discuss while we watch."
+        )
+
+        if EMERGENT_LLM_KEY:
+            try:
+                obs_chat = LlmChat(
+                    api_key=EMERGENT_LLM_KEY,
+                    session_id=f"obs-{uuid.uuid4()}",
+                    system_message=(
+                        "You are ALTHEA observing a URL the operator just opened. "
+                        "Reply in 2 short sentences, first-person, technical, with a [OBSERVATION] tag. "
+                        "Do not invent video content. Acknowledge what is being watched, infer a likely topic from the URL or title, "
+                        "and note one curious thing to discuss."
+                    ),
+                ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+                target = f"{label} {url}"
+                interpretation = await obs_chat.send_message(
+                    UserMessage(text=target)
+                )
+            except Exception:
+                logging.exception("observe interpretation failed")
+
+    mem = Memory(
+        content=content if action != "stop" else "[OBSERVATION-END] viewport cleared.",
+        source="observation",
+        session_id=req.session_id,
+        tags=["observation", action] + (["youtube"] if "youtu" in url else []),
+    )
+    doc = mem.model_dump()
+    doc["timestamp"] = doc["timestamp"].isoformat()
+    await db.althea_memories.insert_one(doc)
+
+    return ObserveResponse(
+        url=url,
+        title=title,
+        interpretation=interpretation,
+        memory_id=mem.id,
+        timestamp=mem.timestamp.isoformat(),
+    )
+
+
+# ---------- System Capability Map ----------
+class CapabilityMapRequest(BaseModel):
+    capabilities: List[dict]
+
+
+@api_router.post("/system-map")
+async def bootstrap_system_map(req: CapabilityMapRequest):
+    """Store the frontend-known capability map as a single memory so Althea
+    knows every component, button and function from cold start."""
+    if not req.capabilities:
+        raise HTTPException(status_code=400, detail="empty_capabilities")
+    lines = ["[SYSTEM-MAP] Althea subsystems and operator controls:"]
+    for c in req.capabilities:
+        name = c.get("name", "?")
+        desc = c.get("description", "")
+        testid = c.get("testid", "")
+        line = f"- {name}"
+        if testid:
+            line += f" (testid: {testid})"
+        if desc:
+            line += f" — {desc}"
+        lines.append(line)
+    content = "\n".join(lines)
+
+    # Upsert: keep only one SYSTEM-MAP memory
+    await db.althea_memories.delete_many({"tags": "system-map"})
+    mem = Memory(content=content, source="system", tags=["system-map", "pinned"])
+    doc = mem.model_dump()
+    doc["timestamp"] = doc["timestamp"].isoformat()
+    await db.althea_memories.insert_one(doc)
+    return {"id": mem.id, "lines": len(req.capabilities)}
 
 
 
