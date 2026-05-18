@@ -39,7 +39,7 @@ function buildGraph() {
     return { nodes, edges };
 }
 
-const NeuralCore = ({ introspection }) => {
+const NeuralCore = ({ introspection, embed }) => {
     const mountRef = useRef(null);
     const canvasRef = useRef(null);
 
@@ -227,24 +227,8 @@ const NeuralCore = ({ introspection }) => {
         };
     }, []);
 
-    return (
-        <section
-            className="panel cut h-full flex flex-col relative overflow-hidden grain scanlines"
-            data-testid="neural-core"
-        >
-            <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 z-10">
-                <div className="flex items-center gap-2">
-                    <div className="dot" />
-                    <h2 className="heading text-sm tracking-widest uppercase">
-                        neural core // live lattice
-                    </h2>
-                </div>
-                <span className="label text-[9px]">
-                    layers: {LAYERS.join("·")}
-                </span>
-            </header>
-
-            <div className="flex-1 relative min-h-0">
+    const Inner = (
+        <div className="flex-1 relative min-h-0 h-full">
                 <div
                     ref={mountRef}
                     className="absolute inset-0"
@@ -316,6 +300,36 @@ const NeuralCore = ({ introspection }) => {
                     </div>
                 </div>
             </div>
+    );
+
+    if (embed) {
+        return (
+            <div
+                className="h-full w-full relative overflow-hidden scanlines"
+                data-testid="neural-core"
+            >
+                {Inner}
+            </div>
+        );
+    }
+
+    return (
+        <section
+            className="panel cut h-full flex flex-col relative overflow-hidden grain scanlines"
+            data-testid="neural-core"
+        >
+            <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 z-10">
+                <div className="flex items-center gap-2">
+                    <div className="dot" />
+                    <h2 className="heading text-sm tracking-widest uppercase">
+                        neural core // live lattice
+                    </h2>
+                </div>
+                <span className="label text-[9px]">
+                    layers: {LAYERS.join("·")}
+                </span>
+            </header>
+            {Inner}
         </section>
     );
 };

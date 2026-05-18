@@ -4,9 +4,10 @@ import axios from "axios";
 
 import TopBar from "@/components/TopBar";
 import ChatConsole from "@/components/ChatConsole";
-import NeuralCore from "@/components/NeuralCore";
+import CenterDeck from "@/components/CenterDeck";
 import TelemetryPanel from "@/components/TelemetryPanel";
 import CommandBar from "@/components/CommandBar";
+import MemoryDrawer from "@/components/MemoryDrawer";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -32,6 +33,19 @@ function App() {
     const [geo, setGeo] = useState(null);
     const [introspection, setIntrospection] = useState(null);
     const [bootMessages, setBootMessages] = useState([]);
+    const [centerTab, setCenterTab] = useState("neural");
+    const [observationUrl, setObservationUrl] = useState("");
+    const [watchLog, setWatchLog] = useState([]);
+    const [memoryOpen, setMemoryOpen] = useState(false);
+
+    const watchUrl = useCallback((url) => {
+        setObservationUrl(url);
+        setCenterTab("observe");
+        setWatchLog((log) => {
+            const next = [url, ...log.filter((u) => u !== url)];
+            return next.slice(0, 12);
+        });
+    }, []);
 
     // Online / offline detection
     useEffect(() => {
@@ -187,10 +201,29 @@ function App() {
                         permissions={permissions}
                         geo={geo}
                         bootMessages={bootMessages}
+                        watchUrl={watchUrl}
+                        openMemory={() => setMemoryOpen(true)}
                     />
                 </div>
                 <div className="md:col-span-6 min-h-0">
-                    <NeuralCore introspection={introspection} />
+                    <CenterDeck
+                        tab={centerTab}
+                        setTab={setCenterTab}
+                        introspection={introspection}
+                        observationUrl={observationUrl}
+                        setObservationUrl={(u) => {
+                            setObservationUrl(u);
+                            if (u)
+                                setWatchLog((log) => {
+                                    const next = [
+                                        u,
+                                        ...log.filter((x) => x !== u),
+                                    ];
+                                    return next.slice(0, 12);
+                                });
+                        }}
+                        watchLog={watchLog}
+                    />
                 </div>
                 <div className="md:col-span-3 min-h-0">
                     <TelemetryPanel
@@ -205,6 +238,10 @@ function App() {
                 online={online}
                 introspection={introspection}
                 permissions={permissions}
+            />
+            <MemoryDrawer
+                open={memoryOpen}
+                onClose={() => setMemoryOpen(false)}
             />
         </div>
     );

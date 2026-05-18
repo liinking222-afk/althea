@@ -121,6 +121,79 @@ def test_chat_delete_session(session):
     assert h.json() == []
 
 
+# -------- Memory --------
+def test_memory_crud_and_no_id_leak(session):
+    # Wipe baseline to ensure deterministic count
+    session.delete(f"{API}/memory", timeout=15)
+
+    # Create a manual memory
+    payload = {"content": "TEST_memory_alpha", "source": "manual", "tags": ["t1"]}
+    r = session.post(f"{API}/memory", json=payload, timeout=15)
+    assert r.status_code == 200, r.text
+    mem = r.json()
+    assert mem["content"] == "TEST_memory_alpha"
+    assert mem["source"] == "manual"
+    assert mem["tags"] == ["t1"]
+    assert "id" in mem and len(mem["id"]) > 0
+    assert "_id" not in mem
+    mem_id = mem["id"]
+
+    # List should contain it, sorted desc, no _id leak
+    lr = session.get(f"{API}/memory", timeout=15)
+    assert lr.status_code == 200
+    lst = lr.json()
+    assert any(m["id"] == mem_id for m in lst)
+    for m in lst:
+        assert "_id" not in m
+    # Sorted timestamp desc
+    ts = [m["timestamp"] for m in lst]
+    assert ts == sorted(ts, reverse=True), "memories not sorted desc"
+
+    # Delete the memory
+    dr = session.delete(f"{API}/memory/{mem_id}", timeout=15)
+    assert dr.status_code == 200
+    assert dr.json().get("deleted") == 1
+
+    # Deleting again returns 404
+    dr2 = session.delete(f"{API}/memory/{mem_id}", timeout=15)
+    assert dr2.status_code == 404
+
+
+def test_memory_empty_content_400(session):
+    r = session.post(f"{API}/memory", json={"content": "   "}, timeout=15)
+    assert r.status_code == 400
+
+
+def test_chat_autocreates_memory(session):
+    # Reset
+    session.delete(f"{API}/memory", timeout=15)
+    before = session.get(f"{API}/memory", timeout=15).json()
+    sid = str(uuid.uuid4())
+    msg = "TEST_auto_mem_probe_unique_42"
+    r = session.post(f"{API}/chat", json={"session_id": sid, "message": msg}, timeout=120)
+    assert r.status_code == 200
+    after = session.get(f"{API}/memory", timeout=15).json()
+    assert len(after) >= len(before) + 1, "memory list did not grow after /chat"
+    # The auto-created memory should contain the user message
+    assert any(msg in m["content"] for m in after), "user message not captured in memory"
+    # cleanup
+    session.delete(f"{API}/chat/{sid}", timeout=15)
+
+
+def test_memory_wipe_all(session):
+    # Seed two
+    session.post(f"{API}/memory", json={"content": "TEST_wipe_a"}, timeout=15)
+    session.post(f"{API}/memory", json={"content": "TEST_wipe_b"}, timeout=15)
+    r = session.delete(f"{API}/memory", timeout=15)
+    assert r.status_code == 200
+    body = r.json()
+    assert "deleted" in body
+    assert isinstance(body["deleted"], int) and body["deleted"] >= 2
+    # List is empty after wipe
+    lst = session.get(f"{API}/memory", timeout=15).json()
+    assert lst == []
+
+
 def test_chat_with_context(session):
     """Ensure context block doesn't break the endpoint."""
     sid = str(uuid.uuid4())

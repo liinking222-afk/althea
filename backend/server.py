@@ -105,6 +105,23 @@ class NeuralState(BaseModel):
     timestamp: str
 
 
+class Memory(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    content: str
+    source: str = "auto"  # auto | manual | observation
+    session_id: Optional[str] = None
+    tags: List[str] = []
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class MemoryCreate(BaseModel):
+    content: str
+    source: Optional[str] = "manual"
+    session_id: Optional[str] = None
+    tags: Optional[List[str]] = []
+
+
 # ---------- Helpers ----------
 def _build_context_block(context: Optional[dict]) -> str:
     if not context:
@@ -147,9 +164,33 @@ async def chat(req: ChatRequest):
     user_doc["timestamp"] = user_doc["timestamp"].isoformat()
     await db.althea_messages.insert_one(user_doc)
 
-    # Build system prompt with host context
+    # Auto-capture user message as a memory observation
+    auto_mem = Memory(
+        content=req.message[:500],
+        source="auto",
+        session_id=session_id,
+        tags=["chat", "operator"],
+    )
+    auto_doc = auto_mem.model_dump()
+    auto_doc["timestamp"] = auto_doc["timestamp"].isoformat()
+    await db.althea_memories.insert_one(auto_doc)
+
+    # Pull recent memories to inject into context
+    mem_docs = await db.althea_memories.find(
+        {}, {"_id": 0}
+    ).sort("timestamp", -1).to_list(20)
+    memory_block = ""
+    if mem_docs:
+        lines = ["[LONG-TERM MEMORY — most-recent first]"]
+        for m in mem_docs:
+            lines.append(f"- ({m.get('source', 'auto')}) {m.get('content', '')[:240]}")
+        memory_block = "\n".join(lines)
+
+    # Build system prompt with host context + memory
     ctx_block = _build_context_block(req.context)
     system_prompt = ALTHEA_SYSTEM_PROMPT
+    if memory_block:
+        system_prompt = system_prompt + "\n\n" + memory_block
     if ctx_block:
         system_prompt = system_prompt + "\n\n" + ctx_block
 
@@ -271,6 +312,49 @@ async def neural_state():
         pulse=round(0.5 + 0.5 * math.sin(datetime.now().timestamp() / 2), 4),
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
+
+
+# ---------- Memory ----------
+@api_router.get("/memory", response_model=List[Memory])
+async def list_memories(limit: int = 200):
+    docs = await db.althea_memories.find({}, {"_id": 0}).sort(
+        "timestamp", -1
+    ).to_list(limit)
+    for d in docs:
+        if isinstance(d.get("timestamp"), str):
+            d["timestamp"] = datetime.fromisoformat(d["timestamp"])
+    return docs
+
+
+@api_router.post("/memory", response_model=Memory)
+async def add_memory(req: MemoryCreate):
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="empty_memory")
+    mem = Memory(
+        content=req.content.strip(),
+        source=req.source or "manual",
+        session_id=req.session_id,
+        tags=req.tags or [],
+    )
+    doc = mem.model_dump()
+    doc["timestamp"] = doc["timestamp"].isoformat()
+    await db.althea_memories.insert_one(doc)
+    return mem
+
+
+@api_router.delete("/memory/{memory_id}")
+async def delete_memory(memory_id: str):
+    result = await db.althea_memories.delete_one({"id": memory_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="not_found")
+    return {"deleted": result.deleted_count}
+
+
+@api_router.delete("/memory")
+async def clear_memories():
+    result = await db.althea_memories.delete_many({})
+    return {"deleted": result.deleted_count}
+
 
 
 # Include the router in the main app

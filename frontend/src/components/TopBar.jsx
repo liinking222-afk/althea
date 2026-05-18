@@ -70,7 +70,7 @@ const TopBar = ({ online, sessionId, onReset, introspection }) => {
                     data-testid="althea-reset-session-btn"
                     className="heading text-[11px] uppercase tracking-widest px-3 py-1.5 border border-white/15 hover:border-[#CCFF00]/60 hover:text-[#CCFF00] transition-colors"
                 >
-                    purge memory
+                    purge session
                 </button>
             </div>
         </header>
