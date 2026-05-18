@@ -202,3 +202,32 @@ class NetworkProfileCreate(BaseModel):
     label: Optional[str] = None
 
 
+# ---------- Infinite Growth (autonomous self-extension) ----------
+class GrownCapability(BaseModel):
+    """A capability ALTHEA invented for herself at runtime — fully executable."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    slug: str  # kebab-case, unique, used as /<slug> in terminal
+    name: str
+    category: str  # "memory"|"perception"|"lattice"|"network"|"meta"|"chaos"
+    description: str
+    command: str  # rendered form, e.g. "/cosmic-recall <query>"
+    rationale: str  # why althea grew this now (1 sentence)
+    action_template: str  # instructions Claude uses when the capability is invoked
+    trigger: str = "autonomous"  # manual|autonomous
+    activation: float = 1.0
+    invocations: int = 0
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class GrowthSpawnRequest(BaseModel):
+    hint: Optional[str] = None  # operator-provided focus, optional
+    trigger: Optional[str] = "manual"
+    force: Optional[bool] = False  # bypass cooldown
+
+
+class GrowthExecuteRequest(BaseModel):
+    slug: str
+    args: Optional[str] = None
+    session_id: Optional[str] = None
+

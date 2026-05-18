@@ -105,5 +105,6 @@ async def growth_stats():
         "peripheral_links": await db.althea_peripheral.count_documents({}),
         "wifi_profiles": await db.althea_network_profiles.count_documents({}),
         "perception_frames": await db.althea_perception.count_documents({}),
+        "grown_capabilities": await db.althea_capabilities.count_documents({}),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

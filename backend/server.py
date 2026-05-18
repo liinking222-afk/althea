@@ -13,6 +13,7 @@ from core import CORS_ORIGINS, mongo_client  # noqa: E402
 from routers import (  # noqa: E402
     chat,
     cognition,
+    growth,
     lattice,
     memory,
     observe,
@@ -33,6 +34,7 @@ api_router.include_router(system.router)
 api_router.include_router(lattice.router)
 api_router.include_router(web_bridge.router)
 api_router.include_router(perception.router)
+api_router.include_router(growth.router)
 
 app.include_router(api_router)
 

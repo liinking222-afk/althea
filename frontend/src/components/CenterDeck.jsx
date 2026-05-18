@@ -3,12 +3,14 @@ import NeuralCore from "@/components/NeuralCore";
 import ObservationScreen from "@/components/ObservationScreen";
 import NetworkScreen from "@/components/NetworkScreen";
 import ConnectScreen from "@/components/ConnectScreen";
+import GrowthScreen from "@/components/GrowthScreen";
 
 const TAB_LABELS = {
     neural: "neural core // live lattice",
     observe: "observation // optical input",
     network: "network // interaction graph",
     connect: "connect // device + wi-fi bridge",
+    growth: "autopoiesis // grown capabilities",
 };
 
 const CenterDeck = ({
@@ -22,6 +24,7 @@ const CenterDeck = ({
     onLatticeNodeClick,
     onHostClick,
     onCognitiveNodeClick,
+    onGrowthExecuted,
 }) => {
     return (
         <section
@@ -40,6 +43,7 @@ const CenterDeck = ({
                     <TabBtn active={tab === "observe"} onClick={() => setTab("observe")} testid="center-tab-observe" label="observe" />
                     <TabBtn active={tab === "network"} onClick={() => setTab("network")} testid="center-tab-network" label="network" />
                     <TabBtn active={tab === "connect"} onClick={() => setTab("connect")} testid="center-tab-connect" label="connect" />
+                    <TabBtn active={tab === "growth"} onClick={() => setTab("growth")} testid="center-tab-growth" label="growth" />
                 </div>
             </header>
 
@@ -75,6 +79,11 @@ const CenterDeck = ({
                 {tab === "connect" && (
                     <div className="absolute inset-0">
                         <ConnectScreen />
+                    </div>
+                )}
+                {tab === "growth" && (
+                    <div className="absolute inset-0">
+                        <GrowthScreen onExecuted={onGrowthExecuted} />
                     </div>
                 )}
             </div>

@@ -41,6 +41,7 @@ function App() {
     const [memoryOpen, setMemoryOpen] = useState(false);
     const [memoryInitialQuery, setMemoryInitialQuery] = useState("");
     const [growth, setGrowth] = useState(null);
+    const [latestGrowthEvent, setLatestGrowthEvent] = useState(null);
 
     // Poll growth stats every 5s
     useEffect(() => {
@@ -59,6 +60,44 @@ function App() {
             cancelled = true;
             clearInterval(t);
         };
+    }, []);
+
+    // Autonomous growth poller — every 60s ask the server to spawn a new
+    // capability. Server-side cooldown gate (120s) keeps it bounded.
+    useEffect(() => {
+        let cancelled = false;
+        const autoSpawn = async () => {
+            try {
+                const res = await axios.post(`${API}/growth/spawn`, {
+                    trigger: "autonomous",
+                });
+                if (!cancelled && res.data?.spawned && res.data.capability) {
+                    setLatestGrowthEvent({
+                        cap: res.data.capability,
+                        at: Date.now(),
+                    });
+                }
+            } catch (_) {
+                /* ignore */
+            }
+        };
+        const t = setInterval(autoSpawn, 60000);
+        // first kick after 20s to give boot sequence breathing room
+        const first = setTimeout(autoSpawn, 20000);
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+            clearTimeout(first);
+        };
+    }, []);
+
+    const handleGrowthExecuted = useCallback((slug, result) => {
+        setLatestGrowthEvent({
+            cap: { slug, name: result?.name || slug },
+            result: result?.result,
+            at: Date.now(),
+            invoked: true,
+        });
     }, []);
 
     const openMemoryWithQuery = useCallback((query) => {
@@ -318,6 +357,8 @@ function App() {
                         openMemory={() => openMemoryWithQuery("")}
                         observation={observationMeta}
                         activeTab={centerTab}
+                        latestGrowthEvent={latestGrowthEvent}
+                        onSwitchTab={setCenterTab}
                     />
                 </div>
                 <div className="md:col-span-6 min-h-0">
@@ -333,6 +374,7 @@ function App() {
                         onCognitiveNodeClick={(nodeId) =>
                             openMemoryWithQuery(nodeId)
                         }
+                        onGrowthExecuted={handleGrowthExecuted}
                     />
                 </div>
                 <div className="md:col-span-3 min-h-0">

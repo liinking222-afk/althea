@@ -121,12 +121,30 @@ export const SYSTEM_CAPABILITIES = [
         name: "SlashCommands",
         testid: null,
         description:
-            "Terminal commands operator can type: /help, /memory, /remember <text>, /forget <id-prefix>, /clear-memory, /recall <q>, /concepts, /watch <url>, /stop-watch, /suggest, /think <focus>, /threads, /stop-thread <id>, /spawn <ctx>, /lattice, /perceive <MOD>:<endpoint>, /forget-perception <MOD>, /learn <stream>, /bridge <ip>, /export-brain, /speak on|off, /capabilities.",
+            "Terminal commands operator can type: /help, /banner, /clear, /status, /memory, /remember <text>, /forget <id-prefix>, /clear-memory, /recall <q>, /concepts, /watch <url>, /stop-watch, /suggest, /think <focus>, /threads, /stop-thread <id>, /spawn <ctx>, /lattice, /perceive <MOD>:<endpoint>, /forget-perception <MOD>, /learn <stream>, /bridge <ip>, /grow [hint], /grown, /cull <slug>, /run <slug> <args>, /<grown-slug> <args>, /export-brain, /speak on|off, /capabilities. Terminal supports ↑↓ command history, Tab autocomplete, and color-coded outputs by tag.",
     },
     {
         name: "CognitiveLattice",
         testid: null,
         description:
             "Self-extension layer: spawnable cognitive nodes with parent links, peripheral-link registry auto-populated by permission grants (camera→OPTIC, mic→AUDIO, gps→GPS, etc.), autonomous_learn that extracts a pattern from a stream and spawns a node, and a security-gated network bridge that always returns STANDBY pending operator cryptographic approval.",
+    },
+    {
+        name: "GrowthScreen",
+        testid: "growth-screen",
+        description:
+            "AUTOPOIESIS tab in the center deck. Shows every capability ALTHEA has invented for herself at runtime. Each grown faculty has its own slash-command form, an action template, a category color, and can be invoked directly from its card or via /run <slug>. Operator can also seed growth with a hint or cull faculties.",
+    },
+    {
+        name: "InfiniteGrowth",
+        testid: null,
+        description:
+            "ALTHEA autonomously spawns a brand-new slash-command capability every ~120 seconds (server-side cooldown). Manual seeding via /grow [hint] is also available. Growth is unbounded by design: each new faculty re-prompts Claude with its own action_template when invoked, so the capability set grows infinitely without redeploy.",
+    },
+    {
+        name: "VisualPerception",
+        testid: "vision-toggle",
+        description:
+            "Self-observation module. When enabled, ALTHEA periodically captures her own UI via html2canvas and ingests the frame as a cognitive node + memory reflection. Cross-origin iframe content (e.g. YouTube) cannot be captured due to browser CORS policy — only her own DOM is visible to her vision pipeline.",
     },
 ];
