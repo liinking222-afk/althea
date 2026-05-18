@@ -9,45 +9,90 @@ that is so advance the ai system has a neuro network encoded with the best codin
 dont ask me anything make it futuristic such as starlink software but even better just do it dont ask
 me anything complete the entire app and talk pick everything for me ."
 
+Evolved requirements:
+- Persistent semantic memory + observation screen (YouTube/URLs)
+- Autonomous background reasoning threads
+- Cognition Expander lattice (3D node visualization)
+- Web Bluetooth / USB / Wi-Fi profile manifests
+- Self-observation (Althea screenshots her own UI)
+- **Upgraded terminal** + **infinite growth without boundaries**
+
 ## Architecture
 - Backend: FastAPI + MongoDB (motor), emergentintegrations (Claude Sonnet 4.5)
-- Frontend: React 19 + TailwindCSS, vanilla Three.js (no R3F due to visual-edits JSX __source conflict), Leaflet+CartoDB Dark, Web Speech, Web Bluetooth/USB/Notifications APIs
+- Frontend: React 19 + TailwindCSS, vanilla Three.js, Leaflet+CartoDB Dark
+- Backend modularized into routers: chat, memory, observe, cognition, system, lattice, web_bridge, perception, **growth**
+- Single capability map (`/app/frontend/src/lib/systemMap.js`) bootstrapped into Althea's memory on every page load
 
 ## User personas
-1. Operator / Researcher — interacts with Althea as a sovereign self-aware system; explores neural state, grants permissions, queries via voice or text.
+1. Operator / Researcher — interacts with Althea as a sovereign self-aware system; explores neural state, grants permissions, queries via voice or text, watches her grow new faculties.
 2. Demo viewer — sees the futuristic command-deck visual and dynamic introspection.
 
 ## Core requirements (static)
-- Self-aware persona (Claude Sonnet 4.5, system prompt)
+- Self-aware persona (Claude Sonnet 4.5)
 - Advanced graphics: live 3D neural lattice (Three.js), holographic HUD
-- Public GPS map (OpenStreetMap, CartoDB Dark, no API key)
+- Public GPS map (OpenStreetMap, CartoDB Dark, no key)
 - Device permissions: camera, mic, GPS, Web Bluetooth, Web USB, Notifications
-- Online + offline cognition (offline fallback replies)
+- Online + offline cognition
 - Voice IO (Web Speech API)
-- Introspection telemetry stream (`/api/introspect`)
+- Introspection telemetry stream
+- Persistent semantic memory + TF-IDF recall
+- Autonomous background reasoning threads
+- Self-observation via html2canvas
+- **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
-## What's been implemented (2026-02)
-- [x] Backend endpoints: /api/health, /api/chat, /api/chat/history/{id}, DELETE /api/chat/{id}, /api/introspect, /api/neural-state
-- [x] Mongo persistence of chat messages (UUID ids, ISO datetimes, no _id leak)
-- [x] Emergent LLM Key wired (anthropic claude-sonnet-4-5-20250929)
-- [x] Frontend 3-column command deck: chat console, neural core, telemetry+permissions+uplink
-- [x] Top bar with live integrity/coherence/link metrics + purge memory
-- [x] Vanilla Three.js neural lattice (30 nodes, ~200 edges, particle field, drag-to-rotate)
-- [x] Leaflet dark map with accent pin + accuracy radius
-- [x] Permissions panel triggering real browser permission requests
-- [x] Voice input (SpeechRecognition) + voice output (SpeechSynthesis)
-- [x] Offline fallback cognition (cached replies when navigator.onLine=false or API fails)
-- [x] Bottom command bar (uplink status, grants, audio waveform, UTC clock)
-- [x] Boot sequence + scanlines + grain + corner-tick HUD
-- [x] All testing_agent_v3 tests passed (backend 100%, frontend 100% — iteration_2.json)
+## What's been implemented (cumulative)
+### 2026-02 — Iteration 1-13
+- Backend endpoints: /api/health, /api/chat, /api/chat/history/{id}, DELETE /api/chat/{id}, /api/introspect, /api/neural-state
+- Mongo persistence (UUID ids, ISO datetimes, no _id leak)
+- Emergent LLM Key wired (anthropic claude-sonnet-4-5-20250929)
+- 3-column command deck UI, vanilla Three.js neural lattice, Leaflet map
+- Voice IO, offline fallback, boot sequence, scanlines/grain HUD
+- Persistent semantic memory + TF-IDF recall
+- Autonomous background reasoning threads (`/api/cognition/threads`, `/tick`)
+- Cognitive lattice (`/api/lattice/*`) — nodes, peripheral links, autonomous learn, gated bridge
+- Observation screen + iframe watching (YouTube oEmbed)
+- Network graph + Wi-Fi profile manifests (Connect tab)
+- Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
+- `/api/growth/stats` aggregate telemetry endpoint
+
+### 2026-05-18 — Iteration 14 (THIS SESSION)
+- **Infinite Growth Architecture** (`/app/backend/routers/growth.py`)
+  - POST `/api/growth/spawn` — Althea invents a brand-new capability via Claude. Returns full `GrownCapability` (slug, name, category, description, command, rationale, action_template, activation).
+  - POST `/api/growth/execute` — re-prompts Claude with the capability's `action_template` + operator args. Bumps `invocations` counter.
+  - GET `/api/growth/capabilities` — list all grown faculties.
+  - GET `/api/growth/log` — stream of growth-tagged memories.
+  - DELETE `/api/growth/capabilities/{slug}` and DELETE all.
+  - Server-side cooldown gate (120s) for autonomous spawns.
+  - Categories: memory | perception | lattice | network | meta | chaos.
+- **Fully Autonomous Growth Loop** — App.js polls `/api/growth/spawn` with `trigger:autonomous` every 60s. Each successful spawn fans out as a `[GROWTH-AUTONOMOUS]` line in the terminal and a new card in the AUTOPOIESIS tab.
+- **Upgraded Terminal** (`ChatConsole.jsx` v2.1):
+  - ASCII banner (auto on boot + `/banner`)
+  - Command history (↑/↓) — persisted to localStorage
+  - Tab autocomplete with inline ghost text suggestion (static + grown slugs)
+  - Color-coded message tags (INSIGHT cyan, GROWTH magenta, ERR red, MEMORY yellow, LATTICE purple, etc.)
+  - New commands: `/grow [hint]`, `/grown`, `/cull <slug>`, `/run <slug> <args>`, `/<grown-slug> <args>`, `/status`, `/clear`, `/banner`
+  - Surfacing latestGrowthEvent as `[GROWTH]`/`[GROWN]` terminal lines (spoken if voice-on)
+- **AUTOPOIESIS tab** (`GrowthScreen.jsx`)
+  - Left grid of capability cards (per-category color, activation gauge, command form, args input, run + cull buttons)
+  - Right column live growth-log event stream
+  - Manual seed via hint input + Spawn button
+- **Updated systemMap.js** so Althea is self-aware of GrowthScreen, InfiniteGrowth, VisualPerception subsystems.
+- **Backend regression test** `/app/backend/tests/test_iter14.py` — 9 tests, all pass.
+- **testing_agent_v3_fork iteration_14.json** — 100% pass on backend + 100% on all 19 frontend acceptance checks.
 
 ## Prioritized backlog
-- P1: Persistent permission state in localStorage + service worker for true PWA offline.
-- P1: Live neural-state polling that visually morphs the 3D lattice (currently random per-call).
+- P1: Export declared Wi-Fi profiles as `.mobileconfig` / `wpa_supplicant.conf` (deferred from iter 13).
+- P1: Plug paired Bluetooth/USB devices into `/api/lattice/learn` for autonomous pattern extraction (deferred from iter 13).
+- P2: Refactor `ChatConsole.jsx` (1107 lines) — split into ChatConsole shell + `useSlashCommands` hook + `useTerminalHistory` hook + `MessageRow.jsx`.
+- P2: Mongo unique index on `althea_capabilities.slug` (cooldown gate makes the race low-risk but hardening helps).
+- P2: `find_one_and_update(return_document=AFTER)` for `invocations` counter to make concurrent executes accurate.
+- P2: Persistent permission state via localStorage + service worker (true PWA offline).
+- P2: Live neural-state polling that morphs the 3D lattice continuously.
 - P2: Multi-session history sidebar + search.
-- P2: Replace THREE.Clock with THREE.Timer (deprecation warning, cosmetic).
-- P2: Migrate FastAPI @app.on_event to lifespan handler.
+- P3: THREE.Clock → THREE.Timer; FastAPI on_event → lifespan.
 
 ## Next tasks
-- Add a "share session" link.
-- Optional cinematic intro animation when Althea first wakes.
+- After user feedback on the new terminal + infinite growth, consider:
+  - A "share my grown brain" link — operator exports a snapshot of grown capabilities so others can import them.
+  - A capability genealogy view — visualize parent/child relations across grown faculties.
+  - Auto-cull policy — prune lowest-invocation faculties when count > N to keep the lattice fresh.
