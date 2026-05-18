@@ -43,6 +43,46 @@ const MemoryDrawer = ({ open, onClose }) => {
         }
     };
 
+    const exportBrain = async () => {
+        try {
+            const res = await axios.get(`${API}/brain/snapshot`);
+            const blob = new Blob([JSON.stringify(res.data, null, 2)], {
+                type: "application/json",
+            });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `althea-brain-${Date.now()}.json`;
+            a.click();
+        } catch (error) {
+            console.error("brain export failed:", error);
+        }
+    };
+
+    const importBrain = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+            try {
+                const data = JSON.parse(evt.target.result);
+                const replace = window.confirm(
+                    "Replace current brain (OK) or merge (Cancel)?",
+                );
+                await axios.post(`${API}/brain/restore`, {
+                    memories: data.memories || [],
+                    threads: data.threads || [],
+                    replace,
+                });
+                load();
+            } catch (error) {
+                console.error("brain import failed:", error);
+                alert("Import failed: " + error.message);
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+    };
+
     if (!open) return null;
 
     const filtered = query
@@ -70,6 +110,26 @@ const MemoryDrawer = ({ open, onClose }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        <label
+                            data-testid="memory-import-label"
+                            className="heading text-[10px] uppercase tracking-widest px-3 py-1.5 border border-white/15 text-[#888] hover:border-[#CCFF00]/60 hover:text-[#CCFF00] cursor-pointer"
+                        >
+                            import
+                            <input
+                                type="file"
+                                accept="application/json"
+                                onChange={importBrain}
+                                className="hidden"
+                                data-testid="memory-import-input"
+                            />
+                        </label>
+                        <button
+                            onClick={exportBrain}
+                            data-testid="memory-export-btn"
+                            className="heading text-[10px] uppercase tracking-widest px-3 py-1.5 border border-white/15 text-[#888] hover:border-[#CCFF00]/60 hover:text-[#CCFF00]"
+                        >
+                            export
+                        </button>
                         <button
                             onClick={wipeAll}
                             disabled={!memories.length}

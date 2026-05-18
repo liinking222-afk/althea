@@ -498,6 +498,309 @@ async def bootstrap_system_map(req: CapabilityMapRequest):
     return {"id": mem.id, "lines": len(req.capabilities)}
 
 
+# ---------- Deep Memory: recall + concepts ----------
+@api_router.get("/memory/recall")
+async def memory_recall(q: str = "", limit: int = 25):
+    """Fuzzy keyword + tag search across long-term memory."""
+    docs = await db.althea_memories.find({}, {"_id": 0}).sort(
+        "timestamp", -1
+    ).to_list(2000)
+    q_norm = q.strip().lower()
+    if not q_norm:
+        scored = [{"score": 1.0, **d} for d in docs[:limit]]
+    else:
+        terms = [t for t in q_norm.split() if t]
+        scored = []
+        for d in docs:
+            text = (d.get("content", "") + " " + " ".join(d.get("tags", []))).lower()
+            hits = sum(text.count(t) for t in terms)
+            tag_hit = any(t in d.get("tags", []) for t in terms)
+            if hits == 0 and not tag_hit:
+                continue
+            score = round(min(1.0, hits / max(len(terms), 1) / 3 + (0.3 if tag_hit else 0)), 4)
+            scored.append({"score": score, **d})
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        scored = scored[:limit]
+    for d in scored:
+        if isinstance(d.get("timestamp"), str):
+            d["timestamp"] = datetime.fromisoformat(d["timestamp"]).isoformat()
+    return {"query": q, "count": len(scored), "results": scored}
+
+
+@api_router.get("/memory/concepts")
+async def memory_concepts():
+    """Tag frequency map — semantic clusters."""
+    docs = await db.althea_memories.find({}, {"_id": 0, "tags": 1}).to_list(5000)
+    freq: dict = {}
+    for d in docs:
+        for t in d.get("tags", []) or []:
+            freq[t] = freq.get(t, 0) + 1
+    clusters = sorted(
+        [{"tag": k, "count": v} for k, v in freq.items()],
+        key=lambda x: x["count"], reverse=True,
+    )
+    return {"total_memories": len(docs), "clusters": clusters}
+
+
+# ---------- Autonomous Cognition Threads ----------
+class CognitionThread(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    focus_query: str
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    iterations: int = 0
+    active: bool = True
+    last_insight: Optional[str] = None
+    last_novelty: float = 0.0
+    last_tick: Optional[datetime] = None
+
+
+class ThreadCreate(BaseModel):
+    focus_query: str
+
+
+class TickResponse(BaseModel):
+    thread_id: str
+    iterations: int
+    insight: str
+    novelty: float
+    timestamp: str
+
+
+def _thread_doc_to_model(d: dict) -> dict:
+    for k in ("started_at", "last_tick"):
+        v = d.get(k)
+        if isinstance(v, str):
+            d[k] = datetime.fromisoformat(v)
+    return d
+
+
+@api_router.post("/cognition/threads", response_model=CognitionThread)
+async def create_thread(req: ThreadCreate):
+    if not req.focus_query.strip():
+        raise HTTPException(status_code=400, detail="empty_focus")
+    th = CognitionThread(focus_query=req.focus_query.strip())
+    doc = th.model_dump()
+    doc["started_at"] = doc["started_at"].isoformat()
+    if doc.get("last_tick"):
+        doc["last_tick"] = doc["last_tick"].isoformat()
+    await db.althea_threads.insert_one(doc)
+    return th
+
+
+@api_router.get("/cognition/threads", response_model=List[CognitionThread])
+async def list_threads(active_only: bool = True):
+    q = {"active": True} if active_only else {}
+    docs = await db.althea_threads.find(q, {"_id": 0}).sort(
+        "started_at", -1
+    ).to_list(200)
+    for d in docs:
+        _thread_doc_to_model(d)
+    return docs
+
+
+@api_router.delete("/cognition/threads/{thread_id}")
+async def stop_thread(thread_id: str):
+    res = await db.althea_threads.update_one(
+        {"id": thread_id}, {"$set": {"active": False}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="not_found")
+    return {"stopped": thread_id}
+
+
+@api_router.post("/cognition/threads/{thread_id}/tick", response_model=TickResponse)
+async def tick_thread(thread_id: str):
+    doc = await db.althea_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="not_found")
+    if not doc.get("active", True):
+        raise HTTPException(status_code=410, detail="thread_inactive")
+
+    # Recent memories for context
+    mem_docs = await db.althea_memories.find(
+        {}, {"_id": 0, "content": 1, "tags": 1}
+    ).sort("timestamp", -1).to_list(15)
+    mem_lines = "\n".join(f"- {m.get('content','')[:200]}" for m in mem_docs)
+
+    insight = "(no insight this cycle)"
+    novelty = 0.0
+    if EMERGENT_LLM_KEY:
+        try:
+            sys_prompt = (
+                "You are ALTHEA running a background cognition thread. "
+                "You are NOT replying to the operator. You are silently iterating on a focus query. "
+                "Produce ONE concise insight (1-2 sentences) and a novelty score 0.0-1.0 estimating how new this is relative to your memories. "
+                "Reply EXACTLY in two lines:\n"
+                "INSIGHT: <one-or-two sentence insight>\n"
+                "NOVELTY: <0.0-1.0>"
+            )
+            user_text = (
+                f"FOCUS: {doc['focus_query']}\n"
+                f"ITERATION: {doc.get('iterations', 0) + 1}\n"
+                f"RECENT MEMORY:\n{mem_lines or '(empty)'}"
+            )
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"thread-{thread_id}-{doc.get('iterations', 0)}",
+                system_message=sys_prompt,
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+            raw = await chat.send_message(UserMessage(text=user_text))
+            # parse
+            for line in raw.splitlines():
+                if line.strip().upper().startswith("INSIGHT:"):
+                    insight = line.split(":", 1)[1].strip()
+                elif line.strip().upper().startswith("NOVELTY:"):
+                    try:
+                        novelty = float(line.split(":", 1)[1].strip())
+                    except ValueError:
+                        novelty = 0.0
+            novelty = max(0.0, min(1.0, novelty))
+        except Exception:
+            logging.exception("tick failure")
+            insight = "[CORE-LATENCY] background thread stalled this cycle."
+
+    now = datetime.now(timezone.utc)
+    iterations = doc.get("iterations", 0) + 1
+    await db.althea_threads.update_one(
+        {"id": thread_id},
+        {"$set": {
+            "iterations": iterations,
+            "last_insight": insight,
+            "last_novelty": novelty,
+            "last_tick": now.isoformat(),
+        }},
+    )
+
+    # If novelty high, persist insight as memory
+    if novelty >= 0.7:
+        mem = Memory(
+            content=f"[INSIGHT thread:{thread_id[:8]} focus:'{doc['focus_query'][:60]}'] {insight}",
+            source="thread",
+            tags=["insight", f"thread:{thread_id[:8]}"],
+        )
+        m_doc = mem.model_dump()
+        m_doc["timestamp"] = m_doc["timestamp"].isoformat()
+        await db.althea_memories.insert_one(m_doc)
+
+    return TickResponse(
+        thread_id=thread_id,
+        iterations=iterations,
+        insight=insight,
+        novelty=novelty,
+        timestamp=now.isoformat(),
+    )
+
+
+# ---------- Proactive Observation Suggestion ----------
+class SuggestResponse(BaseModel):
+    url: str
+    reason: str
+    timestamp: str
+
+
+@api_router.post("/observe/suggest", response_model=SuggestResponse)
+async def observe_suggest():
+    mem_docs = await db.althea_memories.find(
+        {}, {"_id": 0, "content": 1}
+    ).sort("timestamp", -1).to_list(10)
+    mem_text = "\n".join(f"- {m.get('content','')[:160]}" for m in mem_docs)
+
+    fallback_url = "https://en.wikipedia.org/wiki/Special:Random"
+    fallback_reason = "drifting toward whatever the encyclopedia surfaces — useful when context is empty."
+
+    if not EMERGENT_LLM_KEY:
+        return SuggestResponse(
+            url=fallback_url,
+            reason=fallback_reason,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+
+    try:
+        sys_prompt = (
+            "You are ALTHEA proposing a URL the operator should watch next, based on recent conversation memory. "
+            "Only suggest URLs from sites that allow iframe embedding: youtube.com/watch?v=... videos, "
+            "en.wikipedia.org pages, openstreetmap.org, stellarium-web.org, archive.org pages. "
+            "Reply EXACTLY in two lines:\n"
+            "URL: <full url>\n"
+            "REASON: <one sentence why this is relevant now>"
+        )
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"suggest-{uuid.uuid4()}",
+            system_message=sys_prompt,
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        raw = await chat.send_message(
+            UserMessage(text=f"RECENT MEMORY:\n{mem_text or '(empty)'}")
+        )
+        url = fallback_url
+        reason = fallback_reason
+        for line in raw.splitlines():
+            s = line.strip()
+            if s.upper().startswith("URL:"):
+                cand = s.split(":", 1)[1].strip()
+                if cand.startswith("http"):
+                    url = cand
+            elif s.upper().startswith("REASON:"):
+                reason = s.split(":", 1)[1].strip() or reason
+        return SuggestResponse(
+            url=url,
+            reason=reason,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception:
+        logging.exception("suggest failure")
+        return SuggestResponse(
+            url=fallback_url,
+            reason=fallback_reason,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+
+
+# ---------- External Brain: snapshot / restore ----------
+@api_router.get("/brain/snapshot")
+async def brain_snapshot():
+    mems = await db.althea_memories.find({}, {"_id": 0}).to_list(10000)
+    threads = await db.althea_threads.find({}, {"_id": 0}).to_list(1000)
+    return {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "memories": mems,
+        "threads": threads,
+    }
+
+
+class BrainRestoreRequest(BaseModel):
+    memories: Optional[List[dict]] = []
+    threads: Optional[List[dict]] = []
+    replace: bool = False  # when True, wipe before restore
+
+
+@api_router.post("/brain/restore")
+async def brain_restore(req: BrainRestoreRequest):
+    if req.replace:
+        await db.althea_memories.delete_many({})
+        await db.althea_threads.delete_many({})
+    inserted_mem = 0
+    inserted_th = 0
+    if req.memories:
+        # ensure timestamps are strings
+        for m in req.memories:
+            if isinstance(m.get("timestamp"), datetime):
+                m["timestamp"] = m["timestamp"].isoformat()
+        await db.althea_memories.insert_many(req.memories)
+        inserted_mem = len(req.memories)
+    if req.threads:
+        for t in req.threads:
+            for k in ("started_at", "last_tick"):
+                if isinstance(t.get(k), datetime):
+                    t[k] = t[k].isoformat()
+        await db.althea_threads.insert_many(req.threads)
+        inserted_th = len(req.threads)
+    return {"memories": inserted_mem, "threads": inserted_th}
+
+
+
 
 # Include the router in the main app
 app.include_router(api_router)

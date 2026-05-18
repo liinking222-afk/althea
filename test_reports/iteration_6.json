@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 6 (CognitionExpander port) FULL PASS. All 8 new backend endpoints work: /memory/recall (scored+sorted desc, no _id leak), /memory/concepts (clusters sorted by count desc), /cognition/threads POST/GET(active_only)/DELETE/POST tick (iterations increment, 410 on inactive thread, high-novelty insight persisted as Memory with tags ['insight','thread:<prefix>']), /observe/suggest (http/https url + reason), /brain/snapshot (version+exported_at+memories+threads, no _id), /brain/restore (replace wipes, merge appends). 27/27 pytest tests pass (12 new + 15 regression). Frontend slash commands verified end-to-end: /help shows expanded list including /think /threads /recall /concepts /suggest /export-brain; /think prints [THREAD-SPAWN]; /threads lists active; /stop-thread <prefix> prints [THREAD-HALT]; /recall prints [RECALL N matches for \"q\"] with score percentages; /concepts prints [CONCEPTS N clusters across M memories]; /suggest prints [SUGGEST-WATCH <url>] and auto-flips center tab to observe with iframe loaded; /export-brain triggers Blob download with no console errors. MemoryDrawer has memory-export-btn / memory-import-label / memory-import-input — all clickable without throwing. 30s autonomous tick polling useEffect is wired (verified in code; runs GET /cognition/threads + POST /tick per active thread, surfaces [INSIGHT] when novelty>=0.7). Regression on prior commands (/memory /remember /forget /clear-memory /watch /stop-watch /speak /capabilities) is green; map, neural lattice, observation iframe, permissions panel unchanged.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_althea_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~820 lines. With 4 feature areas added, time to split into routers (chat.py, memory.py, observe.py, cognition.py, brain.py). Still readable but approaching the 700-line guideline.",
+    "/cognition/threads/{id}/tick performs a Claude call inline (2-4s) and the frontend's 30s polling loop fires one POST per active thread serially. If the operator spawns many threads this becomes a long blocking window in the browser. Consider Promise.all + per-thread last_tick throttling on the backend (skip if last_tick < 25s ago) to make this safe at scale.",
+    "Insight memories created on novelty>=0.7 use tag 'thread:<id-prefix>' (8 chars). Two threads whose UUIDs collide in the first 8 chars (cosmic-low odds) would share a tag — non-blocking but worth noting.",
+    "/brain/restore does no schema validation on the supplied memories/threads (any dict shape is accepted). Acceptable for a personal external-brain feature, but a malformed import could insert documents missing required fields and cause downstream serialization errors when GET /memory tries to coerce timestamp. Consider validating with the Memory/CognitionThread pydantic models before insert_many.",
+    "Recall scoring is a simple keyword-frequency heuristic (hits/terms/3 + tag bonus). Works fine; the spec called it 'semantic' but it's lexical. Real semantic recall would require an embedding store — out of scope for this iteration but flag for future work.",
+    "Frontend /export-brain uses URL.createObjectURL but never URL.revokeObjectURL — minor memory leak if the operator exports many times in one session."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_althea_api.py (added 9 tests: memory/recall scored+sorted, recall empty query, concepts clusters, thread create+list+tick+stop+410 flow, thread empty focus 400, tick not_found 404, observe/suggest, brain/snapshot structure, brain/restore replace+merge)"
+  ],
+  "success_rate": {"backend": "100% (27/27 pytest)", "frontend": "100% on all iteration-6 acceptance criteria"},
+  "test_credentials": "none required",
+  "seed_data_creation": "Pytests wipe /api/memory at start of relevant tests; brain/restore test snapshots existing state and restores it at the end. Live state post-run contains a handful of [INSIGHT] memories from successful high-novelty ticks plus the standard SYSTEM-MAP and chat/observation rows.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend BASE_URL=https://quantum-mind-os-2.preview.emergentagent.com. EMERGENT_LLM_KEY is set so Claude replies real text (latencies: /chat 2-5s, /tick 2-4s, /observe/suggest 2-4s, /observe with LLM enabled 2-4s). New data-testids added this iteration: memory-export-btn, memory-import-label, memory-import-input (inside MemoryDrawer). New slash commands: /think /threads /stop-thread /recall /concepts /suggest /export-brain. Frontend message format examples: '[THREAD-SPAWN] id:<8> focus:\"...\"', '[THREADS N active]', '[THREAD-HALT] id:<8>', '[RECALL N matches for \"q\"]', '[CONCEPTS N clusters across M memories]', '[SUGGEST-WATCH] <url>\\nreason: ...', '[BRAIN-EXPORT] ... downloaded.', '[INSIGHT thread:<8> iter:N novelty:0.NN] ...'. The 30s autonomous tick loop is in ChatConsole.jsx useEffect (line ~83); if you write a test that depends on a high-novelty insight surfacing you may need to wait 30s+ or trigger a manual tick. Backend collection added: althea_threads.",
+  "rca_of_the_issue": "No issues. Initial Playwright run flagged /recall and /concepts as failing because the test regex \\[RECALL \\d+ matches?\\] expected the closing bracket immediately after the digit, but the actual (correct) frontend format is '[RECALL 6 matches for \"althea\"]'. After loosening the regex to \\[RECALL\\s+\\d+\\s+match the assertions pass — features themselves are working correctly."
+}

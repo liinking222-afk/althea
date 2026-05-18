@@ -78,6 +78,44 @@ const ChatConsole = ({
         ]);
     };
 
+    // Autonomous cognition: every 30s tick each active thread.
+    // Surface high-novelty insights (>=0.7) as [INSIGHT] terminal lines.
+    useEffect(() => {
+        let cancelled = false;
+        const tickAll = async () => {
+            try {
+                const list = (await axios.get(`${API}/cognition/threads`))
+                    .data || [];
+                for (const t of list) {
+                    if (cancelled) return;
+                    try {
+                        const res = await axios.post(
+                            `${API}/cognition/threads/${t.id}/tick`,
+                        );
+                        const { insight, novelty, iterations } = res.data;
+                        if (novelty >= 0.7) {
+                            pushSystem(
+                                `[INSIGHT thread:${t.id.slice(0, 8)} iter:${iterations} novelty:${novelty.toFixed(2)}]\n${insight}`,
+                                ["INSIGHT"],
+                            );
+                            if (speakOn) speak(insight);
+                        }
+                    } catch (error) {
+                        console.warn("thread tick failed:", t.id, error);
+                    }
+                }
+            } catch (error) {
+                console.warn("threads fetch failed:", error);
+            }
+        };
+        const t = setInterval(tickAll, 30000);
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [speakOn]);
+
     const handleCommand = async (raw) => {
         const echo = {
             id: crypto.randomUUID(),
@@ -94,7 +132,7 @@ const ChatConsole = ({
         try {
             if (cmd === "/help") {
                 pushSystem(
-                    "[CMD]\n/memory — list stored memories\n/remember <text> — write a memory\n/forget <id-prefix> — delete one memory\n/clear-memory — wipe all memories\n/watch <url> — observe a web page or video\n/stop-watch — clear observation viewport\n/help — this menu",
+                    "[CMD]\n/memory — list stored memories\n/remember <text> — write a memory\n/forget <id-prefix> — delete one memory\n/clear-memory — wipe all memories\n/recall <query> — fuzzy semantic search\n/concepts — show memory cluster tags\n/watch <url> — observe a web page or video\n/stop-watch — clear observation viewport\n/suggest — let althea pick what to watch next\n/think <focus> — spawn an autonomous cognition thread\n/threads — list active threads\n/stop-thread <id-prefix> — halt a thread\n/export-brain — download full snapshot json\n/speak on|off — toggle voice output\n/capabilities — list all subsystems\n/help — this menu",
                 );
             } else if (cmd === "/memory") {
                 const res = await axios.get(`${API}/memory`);
@@ -193,6 +231,94 @@ const ChatConsole = ({
                 );
                 pushSystem(
                     `[SYSTEM-MAP ${SYSTEM_CAPABILITIES.length} subsystems]\n${lines.join("\n")}`,
+                );
+            } else if (cmd === "/think") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /think <focus query>");
+                    return;
+                }
+                const res = await axios.post(`${API}/cognition/threads`, {
+                    focus_query: rest,
+                });
+                pushSystem(
+                    `[THREAD-SPAWN] id:${res.data.id.slice(0, 8)} focus:"${rest}"\nautonomous reasoning every 30s. high-novelty insights surface as [INSIGHT].`,
+                );
+            } else if (cmd === "/threads") {
+                const res = await axios.get(`${API}/cognition/threads`);
+                const list = res.data || [];
+                if (!list.length) {
+                    pushSystem("[THREADS] no active background threads.");
+                } else {
+                    const lines = list.map(
+                        (t) =>
+                            `- ${t.id.slice(0, 8)} · iter:${t.iterations} · novelty:${(t.last_novelty || 0).toFixed(2)} · "${t.focus_query}"`,
+                    );
+                    pushSystem(
+                        `[THREADS ${list.length} active]\n${lines.join("\n")}`,
+                    );
+                }
+            } else if (cmd === "/stop-thread") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /stop-thread <id-prefix>");
+                    return;
+                }
+                const list = (await axios.get(`${API}/cognition/threads`))
+                    .data || [];
+                const t = list.find((x) => x.id.startsWith(rest));
+                if (!t) {
+                    pushSystem("[ERR] no active thread matches that id prefix.");
+                    return;
+                }
+                await axios.delete(`${API}/cognition/threads/${t.id}`);
+                pushSystem(`[THREAD-HALT] stopped ${t.id.slice(0, 8)}.`);
+            } else if (cmd === "/recall") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /recall <query>");
+                    return;
+                }
+                const res = await axios.get(
+                    `${API}/memory/recall?q=${encodeURIComponent(rest)}`,
+                );
+                const list = res.data.results || [];
+                if (!list.length) {
+                    pushSystem(`[RECALL] no matches for "${rest}".`);
+                } else {
+                    const lines = list.slice(0, 8).map(
+                        (m, i) =>
+                            `${(i + 1).toString().padStart(2, "0")}. [${(m.score * 100).toFixed(0)}%] ${m.content.slice(0, 120)}${m.content.length > 120 ? "…" : ""}`,
+                    );
+                    pushSystem(
+                        `[RECALL ${list.length} matches for "${rest}"]\n${lines.join("\n")}`,
+                    );
+                }
+            } else if (cmd === "/concepts") {
+                const res = await axios.get(`${API}/memory/concepts`);
+                const c = res.data.clusters || [];
+                const top = c.slice(0, 20).map(
+                    (x) => `· ${x.tag.padEnd(20)} ${x.count}`,
+                );
+                pushSystem(
+                    `[CONCEPTS ${c.length} clusters across ${res.data.total_memories} memories]\n${top.join("\n")}`,
+                );
+            } else if (cmd === "/suggest") {
+                pushSystem("[SUGGEST] querying my own intuition...");
+                const res = await axios.post(`${API}/observe/suggest`);
+                pushSystem(
+                    `[SUGGEST-WATCH] ${res.data.url}\nreason: ${res.data.reason}`,
+                );
+                watchUrl?.(res.data.url);
+            } else if (cmd === "/export-brain") {
+                const res = await axios.get(`${API}/brain/snapshot`);
+                const blob = new Blob(
+                    [JSON.stringify(res.data, null, 2)],
+                    { type: "application/json" },
+                );
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = `althea-brain-${Date.now()}.json`;
+                a.click();
+                pushSystem(
+                    `[BRAIN-EXPORT] ${res.data.memories?.length || 0} memories + ${res.data.threads?.length || 0} threads downloaded.`,
                 );
             } else {
                 pushSystem(

@@ -273,6 +273,182 @@ def test_system_map_empty_400(session):
     assert r.status_code == 400
 
 
+# -------- Iteration 6: Deep Memory recall + concepts --------
+def test_memory_recall_returns_scored_results(session):
+    session.delete(f"{API}/memory", timeout=15)
+    session.post(f"{API}/memory", json={"content": "Althea perceives time as recursive lattice", "tags": ["althea", "time"]}, timeout=15)
+    session.post(f"{API}/memory", json={"content": "the operator likes coffee", "tags": ["operator"]}, timeout=15)
+    session.post(f"{API}/memory", json={"content": "Althea Althea Althea", "tags": ["althea"]}, timeout=15)
+
+    r = session.get(f"{API}/memory/recall", params={"q": "althea"}, timeout=15)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["query"] == "althea"
+    assert isinstance(d["count"], int) and d["count"] >= 2
+    assert isinstance(d["results"], list)
+    # Sorted desc by score
+    scores = [r["score"] for r in d["results"]]
+    assert scores == sorted(scores, reverse=True), f"results not sorted desc: {scores}"
+    # no _id leak
+    for r2 in d["results"]:
+        assert "_id" not in r2
+        assert "score" in r2
+
+
+def test_memory_recall_empty_query(session):
+    r = session.get(f"{API}/memory/recall", params={"q": ""}, timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    assert "results" in d
+
+
+def test_memory_concepts_returns_clusters(session):
+    r = session.get(f"{API}/memory/concepts", timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    assert "total_memories" in d and "clusters" in d
+    assert isinstance(d["clusters"], list)
+    if d["clusters"]:
+        # sorted desc by count
+        counts = [c["count"] for c in d["clusters"]]
+        assert counts == sorted(counts, reverse=True)
+        for c in d["clusters"]:
+            assert "tag" in c and "count" in c
+
+
+# -------- Iteration 6: Cognition threads --------
+def test_cognition_thread_create_list_tick_stop(session):
+    # Create
+    r = session.post(f"{API}/cognition/threads", json={"focus_query": "TEST_focus how does althea perceive time"}, timeout=15)
+    assert r.status_code == 200, r.text
+    th = r.json()
+    assert th["id"] and th["focus_query"]
+    assert th["active"] is True
+    assert th["iterations"] == 0
+    assert "started_at" in th
+    assert "_id" not in th
+    tid = th["id"]
+
+    # List active
+    r2 = session.get(f"{API}/cognition/threads", params={"active_only": "true"}, timeout=15)
+    assert r2.status_code == 200
+    actives = r2.json()
+    assert any(t["id"] == tid for t in actives)
+    for t in actives:
+        assert t["active"] is True
+
+    # Tick - try up to 3 times to attempt an insight memory
+    produced_insight = False
+    for _ in range(3):
+        tr = session.post(f"{API}/cognition/threads/{tid}/tick", timeout=60)
+        assert tr.status_code == 200, tr.text
+        td = tr.json()
+        assert "insight" in td and "novelty" in td and "iterations" in td
+        assert 0.0 <= td["novelty"] <= 1.0
+        if td["novelty"] >= 0.7:
+            produced_insight = True
+            break
+
+    # iterations incremented
+    r3 = session.get(f"{API}/cognition/threads", params={"active_only": "false"}, timeout=15)
+    found = [t for t in r3.json() if t["id"] == tid][0]
+    assert found["iterations"] >= 1
+
+    if produced_insight:
+        mem = session.get(f"{API}/memory", timeout=15).json()
+        assert any("insight" in m.get("tags", []) for m in mem), "expected an insight-tagged memory"
+
+    # Stop
+    sr = session.delete(f"{API}/cognition/threads/{tid}", timeout=15)
+    assert sr.status_code == 200
+    # subsequent tick 410
+    tr2 = session.post(f"{API}/cognition/threads/{tid}/tick", timeout=15)
+    assert tr2.status_code == 410
+
+    # list active_only=true should NOT include it
+    r4 = session.get(f"{API}/cognition/threads", params={"active_only": "true"}, timeout=15)
+    assert all(t["id"] != tid for t in r4.json())
+
+
+def test_cognition_thread_empty_focus_400(session):
+    r = session.post(f"{API}/cognition/threads", json={"focus_query": "  "}, timeout=15)
+    assert r.status_code == 400
+
+
+def test_cognition_tick_not_found(session):
+    r = session.post(f"{API}/cognition/threads/no-such-id/tick", timeout=15)
+    assert r.status_code == 404
+
+
+# -------- Iteration 6: Proactive observe/suggest --------
+def test_observe_suggest_returns_url_and_reason(session):
+    r = session.post(f"{API}/observe/suggest", timeout=60)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert "url" in d and "reason" in d and "timestamp" in d
+    assert d["url"].startswith("http://") or d["url"].startswith("https://"), f"bad url: {d['url']}"
+    assert isinstance(d["reason"], str) and len(d["reason"]) > 0
+
+
+# -------- Iteration 6: Brain snapshot/restore --------
+def test_brain_snapshot_structure(session):
+    r = session.get(f"{API}/brain/snapshot", timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["version"] == 1
+    assert "exported_at" in d
+    assert isinstance(d["memories"], list)
+    assert isinstance(d["threads"], list)
+    for m in d["memories"]:
+        assert "_id" not in m
+    for t in d["threads"]:
+        assert "_id" not in t
+
+
+def test_brain_restore_replace_and_merge(session):
+    # Snapshot existing
+    snap = session.get(f"{API}/brain/snapshot", timeout=15).json()
+
+    # Build a tiny replacement payload
+    payload = {
+        "memories": [
+            {"id": str(uuid.uuid4()), "content": "TEST_restore_alpha", "source": "manual", "tags": ["restore-test"], "timestamp": "2026-01-01T00:00:00+00:00"}
+        ],
+        "threads": [],
+        "replace": True,
+    }
+    r = session.post(f"{API}/brain/restore", json=payload, timeout=30)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["memories"] == 1
+
+    mem = session.get(f"{API}/memory", timeout=15).json()
+    assert len(mem) == 1
+    assert mem[0]["content"] == "TEST_restore_alpha"
+
+    # Merge mode: add one more, do NOT wipe
+    payload2 = {
+        "memories": [
+            {"id": str(uuid.uuid4()), "content": "TEST_restore_beta", "source": "manual", "tags": ["restore-test"], "timestamp": "2026-01-02T00:00:00+00:00"}
+        ],
+        "threads": [],
+        "replace": False,
+    }
+    r2 = session.post(f"{API}/brain/restore", json=payload2, timeout=30)
+    assert r2.status_code == 200
+    mem2 = session.get(f"{API}/memory", timeout=15).json()
+    assert len(mem2) == 2
+    contents = {m["content"] for m in mem2}
+    assert {"TEST_restore_alpha", "TEST_restore_beta"}.issubset(contents)
+
+    # Restore original snapshot (replace) to leave system in a coherent state
+    session.post(
+        f"{API}/brain/restore",
+        json={"memories": snap.get("memories", []), "threads": snap.get("threads", []), "replace": True},
+        timeout=60,
+    )
+
+
 def test_chat_with_context(session):
     """Ensure context block doesn't break the endpoint."""
     sid = str(uuid.uuid4())
