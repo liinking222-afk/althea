@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 7 refactor + 2 feature additions tested. 29/30 backend pytest tests pass (96.7%). The refactor is clean — server.py is now 45 lines, 5 routers wired under APIRouter(prefix='/api'); all 27 existing endpoints respond identically (full regression suite green). TickResponse.cached field is present and correctly typed. Tick throttling works exactly as spec'd: first tick cached=False with ~2-4s Claude latency, immediate second tick within 25s returns cached=True, iterations unchanged, sub-100ms response. TF-IDF semantic recall correctly RANKS the right memory at top for all 3 seeded queries, but ONE acceptance criterion fails: for q='quantum physics' against memory 'discussed quantum entanglement and bell tests' the cosine score is 0.2143 (spec requires >0.4). The two other queries pass with comfortable margins: 'QMK keyboard' → keyboard memory at 0.4390, 'hubble nebula deep space' → space memory at 0.5451. Frontend smoke test green: /help, /recall, /concepts, /think, /threads, /suggest, /export-brain commands all present, neural lattice renders, chat console + permissions + observe tabs work, no console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/memory/recall",
+        "issue": "TF-IDF char_wb (3,5) cosine score for q='quantum physics' against 'discussed quantum entanglement and bell tests' is only 0.2143 (spec requires >0.4). The ranking IS correct (entanglement memory wins) but the absolute score is low because 'physics' never appears in any seeded memory and char-n-grams of 'quantum' alone produce limited overlap. The other two queries (QMK keyboard 0.4390, hubble nebula 0.5451) pass cleanly. Either tune the scorer (e.g., normalise by query-token-coverage, or add a small word-level ngram pipeline mixed in, or apply a sqrt/scale to boost weak-but-correct matches) or treat the >0.4 threshold as descriptive rather than prescriptive."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_althea_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Address TF-IDF score-magnitude for q='quantum physics' if the >0.4 threshold is hard-required — current ranking is correct but score is 0.2143. Suggested fix: in utils.semantic_recall add small word-level n-gram TfidfVectorizer (analyzer='word', ngram_range=(1,2)) and average/max with the char_wb sims, OR boost the score with min(1.0, s * 1.8) when there's at least one exact query-token hit. Alternatively, relax the spec threshold to >0.2 for queries whose vocab doesn't overlap the corpus."
+  ],
+  "critical_code_review_comments": [
+    "server.py refactor is clean and well under 60 lines (45). Routers are small and single-purpose. core.py / utils.py / models.py separation is sound.",
+    "Tick throttling logic in routers/cognition.py correctly handles tz-naive last_tick by coercing to UTC, but on a *first* tick the last_insight is null — if the throttle window check runs while iterations>0 but last_insight somehow got cleared, the cache branch would be skipped silently. Not a real bug given the write flow but worth a small invariant comment.",
+    "semantic_recall char_wb(3,5) with sublinear_tf and a 3-doc corpus produces very low absolute scores for queries whose words don't overlap the corpus vocabulary. Consider a hybrid char+word TF-IDF or a length-normalised boost to satisfy the 'score > 0.4' acceptance criterion robustly.",
+    "TICK_THROTTLE_SECONDS=25 is a hardcoded module constant; lifting it to an env var (with default 25) would let the operator tune it without redeploy.",
+    "scikit-learn is now imported at module load in utils.py — this adds ~500ms to backend startup. Fine for now, but if more router modules import utils eagerly, consider lazy-importing inside semantic_recall."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_althea_api.py (added 3 iteration-7 tests: test_memory_recall_semantic_tfidf_quality, test_cognition_tick_throttling_returns_cached, test_tickresponse_includes_cached_field)"
+  ],
+  "success_rate": {"backend": "96.7% (29/30 pytest)", "frontend": "100% on iteration-7 acceptance criteria"},
+  "test_credentials": "none required",
+  "seed_data_creation": "test_memory_recall_semantic_tfidf_quality wipes /api/memory and seeds 3 deterministic memories (nebulae/Hubble, quantum entanglement, QMK keyboard). Other tick-throttling tests create + delete their own threads.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "BASE_URL=https://quantum-mind-os-2.preview.emergentagent.com. Backend has been split into /app/backend/{core,models,utils,system_prompt,server}.py + /app/backend/routers/{chat,memory,observe,cognition,system}.py — server.py is 45 lines. TickResponse now includes 'cached: bool=False'. TICK_THROTTLE_SECONDS=25 in routers/cognition.py. Only outstanding issue: TF-IDF cosine score for q='quantum physics' is 0.2143 vs spec >0.4 — the top-ranked memory is correct, only the absolute score is below threshold. Re-run pytest /app/backend/tests/test_althea_api.py to verify any algorithm tuning. The new test test_memory_recall_semantic_tfidf_quality is the gate.",
+  "rca_of_the_issue": "Root cause: utils.semantic_recall uses ONLY a char_wb (3,5) TF-IDF vectorizer. When the query introduces words absent from the corpus ('physics' has no presence in any seeded memory), only the char-n-grams of the shared word ('quantum') contribute to cosine similarity. With sublinear_tf and only 3 corpus documents (high IDF for every char-n-gram), the absolute cosine value lands at 0.21. The ranking is still correct because the entanglement memory is the only one that shares 'quantum' n-grams at all. Mitigation: blend in a word-level TfidfVectorizer (analyzer='word', ngram_range=(1,2)) and take max(char_sim, word_sim) OR scale the final score by 1 + (fraction_of_query_tokens_appearing_in_doc). Quick fix attempt: replace the linear_kernel call with max(linear_kernel(char), linear_kernel(word)) and the 'quantum physics' query should clear 0.4 because the bigram 'quantum entanglement' will still dominate the word-level pipeline through 'quantum'."
+}

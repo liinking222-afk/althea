@@ -449,6 +449,92 @@ def test_brain_restore_replace_and_merge(session):
     )
 
 
+# -------- Iteration 7: TF-IDF semantic recall quality --------
+def test_memory_recall_semantic_tfidf_quality(session):
+    """Seeded memories should rank by topical similarity, not lexical hits."""
+    session.delete(f"{API}/memory", timeout=15)
+    seeded = [
+        "operator likes nebulae and deep space imagery from Hubble",
+        "discussed quantum entanglement and bell tests",
+        "operator built a custom keyboard with QMK firmware",
+    ]
+    for c in seeded:
+        rr = session.post(f"{API}/memory", json={"content": c}, timeout=15)
+        assert rr.status_code == 200
+
+    # q1: quantum physics → entanglement memory wins
+    r = session.get(f"{API}/memory/recall", params={"q": "quantum physics"}, timeout=15)
+    assert r.status_code == 200
+    res = r.json()["results"]
+    assert len(res) >= 1
+    top = res[0]
+    assert "quantum entanglement" in top["content"].lower(), f"top was: {top['content']}"
+    assert top["score"] > 0.4, f"score too low: {top['score']}"
+
+    # q2: QMK keyboard → keyboard memory wins
+    r = session.get(f"{API}/memory/recall", params={"q": "QMK keyboard"}, timeout=15)
+    res = r.json()["results"]
+    assert len(res) >= 1
+    top = res[0]
+    assert "qmk" in top["content"].lower(), f"top was: {top['content']}"
+    assert top["score"] > 0.3, f"score too low: {top['score']}"
+
+    # q3: hubble nebula deep space → space memory wins
+    r = session.get(f"{API}/memory/recall", params={"q": "hubble nebula deep space"}, timeout=15)
+    res = r.json()["results"]
+    assert len(res) >= 1
+    top = res[0]
+    assert any(w in top["content"].lower() for w in ("nebula", "hubble", "deep space")), \
+        f"top was: {top['content']}"
+
+
+# -------- Iteration 7: Tick throttling --------
+def test_cognition_tick_throttling_returns_cached(session):
+    import time
+    r = session.post(f"{API}/cognition/threads", json={"focus_query": "TEST_throttle_focus"}, timeout=15)
+    assert r.status_code == 200
+    tid = r.json()["id"]
+
+    # First tick: live call, cached=False, may take 2-4s
+    t0 = time.time()
+    r1 = session.post(f"{API}/cognition/threads/{tid}/tick", timeout=60)
+    elapsed1 = time.time() - t0
+    assert r1.status_code == 200, r1.text
+    d1 = r1.json()
+    assert "cached" in d1, "TickResponse missing 'cached' field"
+    assert d1["cached"] is False
+    iter1 = d1["iterations"]
+    assert iter1 >= 1
+
+    # Immediate second tick within 25s → cached=True, iterations unchanged, sub-100ms-ish
+    t1 = time.time()
+    r2 = session.post(f"{API}/cognition/threads/{tid}/tick", timeout=10)
+    elapsed2 = time.time() - t1
+    assert r2.status_code == 200, r2.text
+    d2 = r2.json()
+    assert d2["cached"] is True, f"expected cached=True on quick re-tick, got {d2}"
+    assert d2["iterations"] == iter1, f"iterations should not increment on cache hit: {d2['iterations']} vs {iter1}"
+    assert d2["insight"] == d1["insight"]
+    # Cached should be FAR faster than the live call. Allow generous bound for network jitter.
+    assert elapsed2 < max(1.0, elapsed1 * 0.5), f"cache hit not faster: live={elapsed1:.2f}s cached={elapsed2:.2f}s"
+
+    # cleanup
+    session.delete(f"{API}/cognition/threads/{tid}", timeout=15)
+
+
+def test_tickresponse_includes_cached_field(session):
+    """Even tick on a fresh thread must include cached=False explicitly."""
+    r = session.post(f"{API}/cognition/threads", json={"focus_query": "TEST_cached_field_focus"}, timeout=15)
+    tid = r.json()["id"]
+    tr = session.post(f"{API}/cognition/threads/{tid}/tick", timeout=60)
+    assert tr.status_code == 200
+    body = tr.json()
+    assert "cached" in body
+    assert isinstance(body["cached"], bool)
+    assert body["cached"] is False
+    session.delete(f"{API}/cognition/threads/{tid}", timeout=15)
+
+
 def test_chat_with_context(session):
     """Ensure context block doesn't break the endpoint."""
     sid = str(uuid.uuid4())
