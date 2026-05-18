@@ -134,3 +134,52 @@ class BrainRestoreRequest(BaseModel):
     memories: Optional[List[dict]] = []
     threads: Optional[List[dict]] = []
     replace: bool = False
+
+
+# ---------- Cognitive Lattice (v2 self-extension) ----------
+class CognitiveNode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    activation: float = 1.0
+    parent_id: Optional[str] = None
+    memory_trace: Optional[str] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NodeCreate(BaseModel):
+    context: str
+    parent_id: Optional[str] = None
+    activation: Optional[float] = 1.0
+
+
+class PeripheralLink(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    modality: str
+    endpoint: str
+    status: str = "LISTENING"
+    last_signal: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PerceptionRequest(BaseModel):
+    modality: str
+    endpoint: str
+    status: Optional[str] = "LISTENING"
+
+
+class LatticeState(BaseModel):
+    total_nodes: int
+    active_links: int
+    awareness_depth: int
+    recent_reflections: List[dict]
+    lattice_map: dict
+
+
+class LearnRequest(BaseModel):
+    stream: str
+    label: Optional[str] = None
+
+
+class BridgeRequest(BaseModel):
+    target_ip: str
+    protocol: Optional[str] = "SSH"
+

@@ -10,7 +10,7 @@ from starlette.middleware.cors import CORSMiddleware
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core import CORS_ORIGINS, mongo_client  # noqa: E402
-from routers import chat, cognition, memory, observe, system  # noqa: E402
+from routers import chat, cognition, lattice, memory, observe, system  # noqa: E402
 
 
 app = FastAPI(title="Althea AI Core")
@@ -21,6 +21,7 @@ api_router.include_router(memory.router)
 api_router.include_router(observe.router)
 api_router.include_router(cognition.router)
 api_router.include_router(system.router)
+api_router.include_router(lattice.router)
 
 app.include_router(api_router)
 

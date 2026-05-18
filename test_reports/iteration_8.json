@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 8 ALTHEA v2 Self-Extension lattice tested end-to-end. Backend: 14 new pytest cases for /api/lattice/* (nodes spawn/list/delete with NODE-XXXX zero-pad, perception upsert by uppercased modality + delete 404, autonomous learn spawns node+memory tagged reflection/learn via Claude, lattice state aggregation, bridge STANDBY security stub with exact message + protocol uppercased + memory persisted). All 14 pass plus 30 regression tests from iter 1-7. Frontend: all six new slash commands (/spawn /lattice /perceive /forget-perception /learn /bridge) verified end-to-end via [data-testid=chat-input]+[data-testid=chat-send-btn]; correct network calls captured (POST nodes, GET state, POST/DELETE perception, POST learn, POST bridge). Permission toggle auto-perception mapping verified: POST body for geolocation -> modality=GPS endpoint=navigator.geolocation; notifications -> NOTIF/Notification API; toggle-OFF for granted permission fires DELETE /perception/{MOD}. camera/microphone/bluetooth/usb mapping confirmed in App.js modalityMap (couldn't trigger native grant in headless but per spec that's acceptable).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Permission toggle (geolocation/camera/microphone/bluetooth/usb)", "issue": "Minor: For geolocation, peripheral POST fires immediately after requestGeo() without awaiting the async getCurrentPosition success callback. If the user denies geolocation, the lattice peripheral is still POSTed. Net effect: GPS link may register even on denial. Camera/mic/bluetooth/usb correctly only POST after successful grant since their code paths await navigator.* requests inside try/catch.", "affected_selectors": ["[data-testid=permission-toggle-geolocation]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lattice_v2.py",
+    "/app/backend/tests/test_althea_api.py",
+    "/app/test_reports/pytest/lattice_v2.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) In App.js togglePermission, for geolocation, wait for the success callback before POST /api/lattice/perception to avoid registering a GPS link on user denial."
+  ],
+  "critical_code_review_comments": [
+    "lattice.py uses count_documents for next NODE id — vulnerable to a race if two spawn requests collide concurrently and to id reuse after DELETE /lattice/nodes. Consider a monotonic counter document or uuid + display index.",
+    "lattice.py serializes timestamps to ISO strings in inserts but deserializes only on list endpoints — keep this pattern uniform across all routers.",
+    "/lattice/state recomputes total_nodes by loading up to 2000 docs; for scale, prefer count_documents and project only id+activation for lattice_map.",
+    "ChatConsole.jsx is ~670 lines and contains all 18 slash commands inline. Consider extracting commands into a registry/map for maintainability (also enables unit testing each command in isolation)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lattice_v2.py (new)"
+  ],
+  "success_rate": {"backend": "100% (44/44)", "frontend": "100% slash cmds, mapping verified"},
+  "seed_data_creation": "Tests create TEST_-prefixed nodes/memories and wipe lattice nodes at module start; cleanup is implicit via wipe endpoints.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests live in /app/backend/tests/test_althea_api.py (iter1-7 regression) and /app/backend/tests/test_lattice_v2.py (iter8 v2 lattice). Run with REACT_APP_BACKEND_URL exported. Lattice collections: althea_nodes, althea_peripheral, althea_memories. Bridge is a security stub by spec — never expect a real network connection."
+}

@@ -159,10 +159,25 @@ function App() {
     const togglePermission = useCallback(
         async (key) => {
             const current = permissions[key];
-            // already granted -> revoke locally (browser keeps real grant; we just stop using it)
+            const modalityMap = {
+                camera: { modality: "OPTIC", endpoint: "navigator.mediaDevices/camera" },
+                microphone: { modality: "AUDIO", endpoint: "navigator.mediaDevices/microphone" },
+                geolocation: { modality: "GPS", endpoint: "navigator.geolocation" },
+                bluetooth: { modality: "BLUETOOTH", endpoint: "navigator.bluetooth" },
+                usb: { modality: "USB", endpoint: "navigator.usb" },
+                notifications: { modality: "NOTIF", endpoint: "Notification API" },
+            };
+            const sense = modalityMap[key];
+
+            // already granted -> revoke locally + de-register peripheral
             if (current) {
                 setPermissions((p) => ({ ...p, [key]: false }));
                 if (key === "geolocation") setGeo(null);
+                if (sense) {
+                    axios
+                        .delete(`${API}/lattice/perception/${sense.modality}`)
+                        .catch(() => {});
+                }
                 return;
             }
             try {
@@ -197,6 +212,12 @@ function App() {
                         ...p,
                         notifications: r === "granted",
                     }));
+                }
+                // Register peripheral link in the cognitive lattice
+                if (sense) {
+                    axios
+                        .post(`${API}/lattice/perception`, sense)
+                        .catch(() => {});
                 }
             } catch (e) {
                 console.warn("permission denied:", key, e.message);

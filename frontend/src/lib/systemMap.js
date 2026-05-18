@@ -121,6 +121,12 @@ export const SYSTEM_CAPABILITIES = [
         name: "SlashCommands",
         testid: null,
         description:
-            "Terminal commands operator can type: /help, /memory, /remember <text>, /forget <id-prefix>, /clear-memory, /watch <url>, /stop-watch, /speak on|off, /capabilities.",
+            "Terminal commands operator can type: /help, /memory, /remember <text>, /forget <id-prefix>, /clear-memory, /recall <q>, /concepts, /watch <url>, /stop-watch, /suggest, /think <focus>, /threads, /stop-thread <id>, /spawn <ctx>, /lattice, /perceive <MOD>:<endpoint>, /forget-perception <MOD>, /learn <stream>, /bridge <ip>, /export-brain, /speak on|off, /capabilities.",
+    },
+    {
+        name: "CognitiveLattice",
+        testid: null,
+        description:
+            "Self-extension layer: spawnable cognitive nodes with parent links, peripheral-link registry auto-populated by permission grants (camera→OPTIC, mic→AUDIO, gps→GPS, etc.), autonomous_learn that extracts a pattern from a stream and spawns a node, and a security-gated network bridge that always returns STANDBY pending operator cryptographic approval.",
     },
 ];

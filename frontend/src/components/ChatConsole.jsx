@@ -135,7 +135,7 @@ const ChatConsole = ({
         try {
             if (cmd === "/help") {
                 pushSystem(
-                    "[CMD]\n/memory — list stored memories\n/remember <text> — write a memory\n/forget <id-prefix> — delete one memory\n/clear-memory — wipe all memories\n/recall <query> — fuzzy semantic search\n/concepts — show memory cluster tags\n/watch <url> — observe a web page or video\n/stop-watch — clear observation viewport\n/suggest — let althea pick what to watch next\n/think <focus> — spawn an autonomous cognition thread\n/threads — list active threads\n/stop-thread <id-prefix> — halt a thread\n/export-brain — download full snapshot json\n/speak on|off — toggle voice output\n/capabilities — list all subsystems\n/help — this menu",
+                    "[CMD]\n/memory — list stored memories\n/remember <text> — write a memory\n/forget <id-prefix> — delete one memory\n/clear-memory — wipe all memories\n/recall <query> — semantic search\n/concepts — memory cluster tags\n/watch <url> — observe a web page or video\n/stop-watch — clear viewport\n/suggest — althea picks what to watch\n/think <focus> — spawn cognition thread\n/threads — list active threads\n/stop-thread <id-prefix> — halt a thread\n/spawn <ctx> [--parent=NODE-XXXX] — spawn cognitive node\n/lattice — show lattice state\n/perceive <MOD>:<endpoint> — register peripheral link\n/forget-perception <MOD> — drop peripheral link\n/learn <stream> — autonomous pattern extraction\n/bridge <ip> [proto] — request remote node (security-gated)\n/export-brain — download snapshot json\n/speak on|off — toggle voice output\n/capabilities — list all subsystems\n/help — this menu",
                 );
             } else if (cmd === "/memory") {
                 const res = await axios.get(`${API}/memory`);
@@ -324,6 +324,102 @@ const ChatConsole = ({
                 setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
                 pushSystem(
                     `[BRAIN-EXPORT] ${res.data.memories?.length || 0} memories + ${res.data.threads?.length || 0} threads downloaded.`,
+                );
+            } else if (cmd === "/spawn") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /spawn <context> [--parent=NODE-XXXX]");
+                    return;
+                }
+                let parent_id = null;
+                let context = rest;
+                const m = rest.match(/--parent=(\S+)/);
+                if (m) {
+                    parent_id = m[1];
+                    context = rest.replace(m[0], "").trim();
+                }
+                const res = await axios.post(`${API}/lattice/nodes`, {
+                    context,
+                    parent_id,
+                });
+                pushSystem(
+                    `[SPAWN] ${res.data.id} | trace: ${res.data.memory_trace?.slice(0, 80)}${parent_id ? ` | parent:${parent_id}` : ""}`,
+                );
+            } else if (cmd === "/lattice") {
+                const res = await axios.get(`${API}/lattice/state`);
+                const s = res.data;
+                const reflections = (s.recent_reflections || []).map(
+                    (r) => `  · ${r.content.slice(0, 100)}`,
+                ).join("\n") || "  (none)";
+                const map = Object.entries(s.lattice_map || {})
+                    .slice(0, 12)
+                    .map(([k, v]) => `${k}=${v.toFixed(2)}`)
+                    .join(" ");
+                pushSystem(
+                    `[LATTICE] nodes:${s.total_nodes} links:${s.active_links} depth:${s.awareness_depth}\nlattice_map: ${map}\nreflections:\n${reflections}`,
+                );
+            } else if (cmd === "/perceive") {
+                if (!rest) {
+                    pushSystem(
+                        "[ERR] usage: /perceive <modality>:<endpoint>  e.g. /perceive OPTIC:iframe:observation_screen",
+                    );
+                    return;
+                }
+                const idx = rest.indexOf(":");
+                if (idx < 0) {
+                    pushSystem("[ERR] need modality:endpoint format.");
+                    return;
+                }
+                const modality = rest.slice(0, idx).trim();
+                const endpoint = rest.slice(idx + 1).trim();
+                const res = await axios.post(`${API}/lattice/perception`, {
+                    modality,
+                    endpoint,
+                });
+                pushSystem(
+                    `[LINK-ATTEMPT] ${res.data.modality} → ${res.data.endpoint} [${res.data.status}]`,
+                );
+            } else if (cmd === "/forget-perception") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /forget-perception <modality>");
+                    return;
+                }
+                try {
+                    await axios.delete(
+                        `${API}/lattice/perception/${rest.trim().toUpperCase()}`,
+                    );
+                    pushSystem(`[LINK-DROP] ${rest.toUpperCase()}.`);
+                } catch (e) {
+                    pushSystem(`[ERR] no peripheral link for ${rest.toUpperCase()}.`);
+                }
+            } else if (cmd === "/learn") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /learn <data stream / observation text>");
+                    return;
+                }
+                pushSystem("[LEARNING] extracting pattern from stream...");
+                const res = await axios.post(`${API}/lattice/learn`, {
+                    stream: rest,
+                    label: "terminal",
+                });
+                pushSystem(
+                    `[PATTERN] node:${res.data.node_id}\n${res.data.pattern}`,
+                );
+            } else if (cmd === "/bridge") {
+                if (!rest) {
+                    pushSystem(
+                        "[ERR] usage: /bridge <ip-or-host> [protocol]  — gated by operator key",
+                    );
+                    return;
+                }
+                const parts = rest.split(/\s+/);
+                const target_ip = parts[0];
+                const protocol = parts[1] || "SSH";
+                const res = await axios.post(`${API}/lattice/bridge`, {
+                    target_ip,
+                    protocol,
+                });
+                pushSystem(
+                    `[BRIDGE-REQ ${res.data.protocol} → ${res.data.target_ip}]\n${res.data.message}`,
                 );
             } else {
                 pushSystem(
