@@ -147,6 +147,13 @@ const ChatConsole = ({
     const send = async (textOverride) => {
         const text = (textOverride ?? input).trim();
         if (!text || sending) return;
+
+        if (text.startsWith("/")) {
+            setInput("");
+            await handleCommand(text);
+            return;
+        }
+
         setSending(true);
         const userMsg = {
             id: crypto.randomUUID(),
