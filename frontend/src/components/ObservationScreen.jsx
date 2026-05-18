@@ -33,7 +33,9 @@ function normalize(u) {
             const id = parsed.pathname.replace("/", "");
             if (id) return `https://www.youtube.com/embed/${id}`;
         }
-    } catch (_) {}
+    } catch (error) {
+        console.warn("url normalize failed:", error);
+    }
     return url;
 }
 
@@ -202,9 +204,9 @@ const ObservationScreen = ({ url, setUrl, watchLog, meta }) => {
             {watchLog && watchLog.length > 0 && (
                 <div className="border-t border-white/10 px-4 py-2 text-[10px] text-[#888] flex items-center gap-3 overflow-x-auto althea-scroll">
                     <span className="label text-[#666]">recent:</span>
-                    {watchLog.slice(0, 5).map((w, i) => (
+                    {watchLog.slice(0, 5).map((w) => (
                         <button
-                            key={i}
+                            key={w}
                             onClick={() => setUrl(w)}
                             className="hover:text-[#CCFF00] truncate max-w-[180px]"
                             title={w}

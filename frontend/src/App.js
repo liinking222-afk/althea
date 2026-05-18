@@ -61,7 +61,8 @@ function App() {
                     interpretation: res.data?.interpretation || "",
                     timestamp: res.data?.timestamp,
                 });
-            } catch (_) {
+            } catch (error) {
+                console.error("observe call failed:", error);
                 setObservationMeta({ url, title: null, interpretation: "" });
             }
         },
@@ -208,7 +209,9 @@ function App() {
     const resetSession = useCallback(async () => {
         try {
             await axios.delete(`${API}/chat/${sessionId}`);
-        } catch (_) {}
+        } catch (error) {
+            console.error("session reset failed:", error);
+        }
         const id = crypto.randomUUID();
         localStorage.setItem("althea_session_id", id);
         setSessionId(id);

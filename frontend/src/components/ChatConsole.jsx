@@ -50,8 +50,8 @@ const ChatConsole = ({
                     `${API}/chat/history/${sessionId}`,
                 );
                 if (!cancelled) setMessages(res.data || []);
-            } catch (_) {
-                /* empty */
+            } catch (error) {
+                console.error("history load failed:", error);
             }
         })();
         return () => {
@@ -161,7 +161,9 @@ const ChatConsole = ({
                         const id = u.pathname.replace("/", "");
                         if (id) target = `https://www.youtube.com/embed/${id}`;
                     }
-                } catch (_) {}
+                } catch (error) {
+                    console.warn("watch url normalize failed:", error);
+                }
                 watchUrl?.(target);
                 pushSystem(
                     `[OPTICAL-LOCK] fixating on ${target}. switching center deck to observation.`,

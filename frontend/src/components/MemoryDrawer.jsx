@@ -28,7 +28,9 @@ const MemoryDrawer = ({ open, onClose }) => {
         try {
             await axios.delete(`${API}/memory/${id}`);
             setMemories((m) => m.filter((x) => x.id !== id));
-        } catch (_) {}
+        } catch (error) {
+            console.error("memory delete failed:", error);
+        }
     };
 
     const wipeAll = async () => {
@@ -36,7 +38,9 @@ const MemoryDrawer = ({ open, onClose }) => {
         try {
             await axios.delete(`${API}/memory`);
             setMemories([]);
-        } catch (_) {}
+        } catch (error) {
+            console.error("memory wipe failed:", error);
+        }
     };
 
     if (!open) return null;
