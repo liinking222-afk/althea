@@ -127,9 +127,22 @@ const ChatConsole = ({
                     pushSystem("[ERR] usage: /watch <url>");
                     return;
                 }
-                watchUrl?.(rest);
+                let target = rest.trim();
+                if (!/^https?:\/\//i.test(target)) target = "https://" + target;
+                try {
+                    const u = new URL(target);
+                    const host = u.hostname.replace(/^www\./, "");
+                    if (host === "youtube.com" || host === "m.youtube.com") {
+                        const v = u.searchParams.get("v");
+                        if (v) target = `https://www.youtube.com/embed/${v}`;
+                    } else if (host === "youtu.be") {
+                        const id = u.pathname.replace("/", "");
+                        if (id) target = `https://www.youtube.com/embed/${id}`;
+                    }
+                } catch (_) {}
+                watchUrl?.(target);
                 pushSystem(
-                    `[OPTICAL-LOCK] fixating on ${rest}. switching center deck to observation.`,
+                    `[OPTICAL-LOCK] fixating on ${target}. switching center deck to observation.`,
                 );
             } else if (cmd === "/stop-watch") {
                 watchUrl?.("");
