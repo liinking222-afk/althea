@@ -50,9 +50,11 @@ const MemoryDrawer = ({ open, onClose }) => {
                 type: "application/json",
             });
             const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
+            const objUrl = URL.createObjectURL(blob);
+            a.href = objUrl;
             a.download = `althea-brain-${Date.now()}.json`;
             a.click();
+            setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
         } catch (error) {
             console.error("brain export failed:", error);
         }

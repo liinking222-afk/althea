@@ -86,24 +86,27 @@ const ChatConsole = ({
             try {
                 const list = (await axios.get(`${API}/cognition/threads`))
                     .data || [];
-                for (const t of list) {
-                    if (cancelled) return;
-                    try {
-                        const res = await axios.post(
-                            `${API}/cognition/threads/${t.id}/tick`,
-                        );
-                        const { insight, novelty, iterations } = res.data;
-                        if (novelty >= 0.7) {
-                            pushSystem(
-                                `[INSIGHT thread:${t.id.slice(0, 8)} iter:${iterations} novelty:${novelty.toFixed(2)}]\n${insight}`,
-                                ["INSIGHT"],
+                // Fire all ticks in parallel so many threads don't serialize.
+                await Promise.allSettled(
+                    list.map(async (t) => {
+                        try {
+                            const res = await axios.post(
+                                `${API}/cognition/threads/${t.id}/tick`,
                             );
-                            if (speakOn) speak(insight);
+                            const { insight, novelty, iterations } = res.data;
+                            if (cancelled) return;
+                            if (novelty >= 0.7) {
+                                pushSystem(
+                                    `[INSIGHT thread:${t.id.slice(0, 8)} iter:${iterations} novelty:${novelty.toFixed(2)}]\n${insight}`,
+                                    ["INSIGHT"],
+                                );
+                                if (speakOn) speak(insight);
+                            }
+                        } catch (error) {
+                            console.warn("thread tick failed:", t.id, error);
                         }
-                    } catch (error) {
-                        console.warn("thread tick failed:", t.id, error);
-                    }
-                }
+                    }),
+                );
             } catch (error) {
                 console.warn("threads fetch failed:", error);
             }
@@ -314,9 +317,11 @@ const ChatConsole = ({
                     { type: "application/json" },
                 );
                 const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
+                const objUrl = URL.createObjectURL(blob);
+                a.href = objUrl;
                 a.download = `althea-brain-${Date.now()}.json`;
                 a.click();
+                setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
                 pushSystem(
                     `[BRAIN-EXPORT] ${res.data.memories?.length || 0} memories + ${res.data.threads?.length || 0} threads downloaded.`,
                 );
