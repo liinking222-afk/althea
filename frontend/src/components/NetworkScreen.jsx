@@ -232,8 +232,8 @@ const NetworkScreen = ({ onHostClick, onCognitiveNodeClick }) => {
                                 }}
                                 data-testid={`network-node-${n.id}`}
                             >
-                                {/* invisible larger picking circle for easier click */}
-                                <circle r={Math.max(r + 4, 10)} fill="transparent" />
+                                {/* larger transparent picking disc so playwright + touch land reliably */}
+                                <circle r={Math.max(r + 8, 16)} fill="transparent" />
                                 <circle
                                     r={r}
                                     fill={color}
@@ -245,10 +245,11 @@ const NetworkScreen = ({ onHostClick, onCognitiveNodeClick }) => {
                                     }}
                                 />
                                 <text
-                                    x={r + 4}
-                                    y={3}
+                                    x={0}
+                                    y={r + 12}
                                     fontSize={9}
                                     fill={color}
+                                    textAnchor="middle"
                                     fontFamily="JetBrains Mono, monospace"
                                     style={{ pointerEvents: "none" }}
                                 >

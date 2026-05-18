@@ -2,6 +2,7 @@
 import hashlib
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 from typing import Optional, List
 from urllib.parse import urlparse
@@ -251,7 +252,12 @@ async def create_network_profile(req: NetworkProfileCreate):
         raise HTTPException(status_code=400, detail="empty_ssid")
     security = (req.security or "WPA2").strip().upper()
     has_password = bool(req.password)
+    # Idempotent: reuse existing id when the same SSID is re-saved.
+    existing = await db.althea_network_profiles.find_one(
+        {"ssid": ssid}, {"_id": 0, "id": 1}
+    )
     profile = NetworkProfile(
+        id=existing["id"] if existing else str(uuid.uuid4()),
         ssid=ssid,
         security=security,
         label=(req.label or "").strip() or None,

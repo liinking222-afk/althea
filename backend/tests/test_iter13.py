@@ -93,7 +93,7 @@ def test_graph_contains_wifi_peripheral(client):
     g = r.json()
     labels = [n["label"] for n in g["nodes"] if n["type"] == "peripheral"]
     # peripheral label should start with WIFI:<first 16 chars of ssid>
-    assert any(l.startswith("WIFI:TEST_Althea-La") or l.startswith("WIFI:TEST_Althea") for l in labels), labels
+    assert any(lbl.startswith("WIFI:TEST_Althea-La") or lbl.startswith("WIFI:TEST_Althea") for lbl in labels), labels
 
 
 # ---------- Memory tagged wifi/profile/<sec_lower> ----------
@@ -130,7 +130,7 @@ def test_delete_profile(client):
     time.sleep(0.3)
     g = client.get(f"{API}/network/graph").json()
     p_labels = [n["label"] for n in g["nodes"] if n["type"] == "peripheral"]
-    assert not any(l.startswith("WIFI:TEST_DeleteMe") for l in p_labels), p_labels
+    assert not any(lbl.startswith("WIFI:TEST_DeleteMe") for lbl in p_labels), p_labels
     # deleting non-existent -> 404
     r = client.delete(f"{API}/network/profile/not-an-id-xyz")
     assert r.status_code == 404
