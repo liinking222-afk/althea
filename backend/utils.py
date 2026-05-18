@@ -54,12 +54,10 @@ async def fetch_youtube_title(url: str) -> Optional[str]:
 
 def semantic_recall(query: str, docs: List[dict], limit: int = 25) -> List[dict]:
     """
-    TF-IDF cosine similarity recall.
-    - Char-3-gram + word features (catches morphology + topic words)
-    - Sublinear TF so a single repeated term doesn't dominate
-    - English stop-word removal
-    - Tag bonus: +0.15 if any query token equals one of the memory's tags
-    Returns docs ranked by score desc (score in [0,1]), filtered score>0.
+    Hybrid TF-IDF cosine recall:
+    - char_wb (3-5) catches morphology / partial matches
+    - word (1-2) catches topic-level lexical overlap
+    Take max of the two per-doc similarities, then add a tag bonus.
     """
     if not docs:
         return []
@@ -71,25 +69,48 @@ def semantic_recall(query: str, docs: List[dict], limit: int = 25) -> List[dict]
         (d.get("content", "") + " " + " ".join(d.get("tags", []) or []))
         for d in docs
     ]
-    try:
-        vec = TfidfVectorizer(
-            analyzer="char_wb",
-            ngram_range=(3, 5),
-            sublinear_tf=True,
-            min_df=1,
-        )
-        matrix = vec.fit_transform(corpus + [q])
-        sims = linear_kernel(matrix[-1], matrix[:-1]).flatten()
-    except ValueError:
-        # corpus too small / empty
-        sims = [0.0] * len(docs)
 
-    q_tokens = {t for t in q.lower().split() if t}
+    def _sims(analyzer: str, ngram_range):
+        try:
+            vec = TfidfVectorizer(
+                analyzer=analyzer,
+                ngram_range=ngram_range,
+                sublinear_tf=True,
+                min_df=1,
+                stop_words="english" if analyzer == "word" else None,
+            )
+            matrix = vec.fit_transform(corpus + [q])
+            return linear_kernel(matrix[-1], matrix[:-1]).flatten()
+        except ValueError:
+            return [0.0] * len(docs)
+
+    char_sims = _sims("char_wb", (3, 5))
+    word_sims = _sims("word", (1, 2))
+
+    import re
+    q_tokens = {t for t in re.findall(r"[a-z0-9]+", q.lower()) if t}
     scored = []
-    for d, s in zip(docs, sims):
+    for d, cs, ws in zip(docs, char_sims, word_sims):
         tag_set = {t.lower() for t in (d.get("tags", []) or [])}
-        bonus = 0.15 if q_tokens & tag_set else 0.0
-        score = float(min(1.0, s + bonus))
+        tag_bonus = 0.15 if q_tokens & tag_set else 0.0
+
+        # Explicit query-token coverage: fraction of query tokens that appear
+        # literally in this doc. Strong signal for short queries against a
+        # tiny corpus where TF-IDF magnitudes stay low.
+        if q_tokens:
+            doc_tokens = set(
+                re.findall(
+                    r"[a-z0-9]+",
+                    (d.get("content", "") + " " + " ".join(d.get("tags", []) or [])).lower(),
+                )
+            )
+            coverage = len(q_tokens & doc_tokens) / len(q_tokens)
+        else:
+            coverage = 0.0
+        coverage_bonus = 0.5 * coverage
+
+        base = max(float(cs), float(ws))
+        score = float(min(1.0, base + coverage_bonus + tag_bonus))
         if score > 0:
             scored.append({"score": round(score, 4), **d})
     scored.sort(key=lambda x: x["score"], reverse=True)
