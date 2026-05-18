@@ -215,8 +215,9 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     latticeGroup.add(new THREE.Line(geom, mat));
                 });
 
-                // node spheres
-                const geom = new THREE.SphereGeometry(0.14, 12, 12);
+                // node spheres — visible sphere + larger transparent pick mesh
+                const visibleGeom = new THREE.SphereGeometry(0.14, 12, 12);
+                const pickGeom = new THREE.SphereGeometry(0.5, 8, 8);
                 nodes.forEach((n, idx) => {
                     const mat = new THREE.MeshStandardMaterial({
                         color: CYAN,
@@ -224,7 +225,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                         emissiveIntensity: 1.4,
                         toneMapped: false,
                     });
-                    const mesh = new THREE.Mesh(geom, mat);
+                    const mesh = new THREE.Mesh(visibleGeom, mat);
                     mesh.position.copy(positions.get(n.id));
                     mesh.userData = {
                         seed: idx * 0.41 + 0.13,
@@ -234,6 +235,18 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     };
                     latticeGroup.add(mesh);
                     latticeMeshes.push(mesh);
+
+                    // invisible larger sphere so the raycaster picks reliably
+                    const pickMat = new THREE.MeshBasicMaterial({
+                        transparent: true,
+                        opacity: 0,
+                        depthWrite: false,
+                    });
+                    const pick = new THREE.Mesh(pickGeom, pickMat);
+                    pick.position.copy(positions.get(n.id));
+                    pick.userData = mesh.userData; // share so raycaster returns same data
+                    latticeGroup.add(pick);
+                    latticeMeshes.push(pick);
                 });
             } catch (error) {
                 console.warn("lattice refresh failed:", error);
@@ -300,6 +313,17 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         };
         renderer.domElement.addEventListener("mousedown", onCanvasMouseDown);
         renderer.domElement.addEventListener("click", onCanvasClick);
+
+        // Deterministic test hook for E2E so playwright can verify the
+        // click -> MemoryDrawer flow without pixel-perfect raycasting.
+        window.__althea_pickFirstSatellite = () => {
+            const m = latticeMeshes.find((mesh) => mesh.userData?.nodeId);
+            if (m && onClickRef.current) {
+                onClickRef.current(m.userData);
+                return m.userData.nodeId;
+            }
+            return null;
+        };
 
         const animate = () => {
             raf = requestAnimationFrame(animate);

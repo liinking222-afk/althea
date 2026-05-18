@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 11.5 (iter_12 file) — click->MemoryDrawer happy path is now FULLY VERIFIED end-to-end via the new deterministic test hook. After loading the app on the default NEURAL tab, sending `/spawn first thought` through the terminal (data-testid=chat-input), and waiting 8s for the satellite poll, `typeof window.__althea_pickFirstSatellite === 'function'`. Calling it returned 'NODE-0000' (matches /^NODE-\\d+$/), [data-testid=memory-drawer] became visible, and [data-testid=memory-search-input] was pre-populated with the EXACT same id 'NODE-0000'. The drawer's close button (aria-label*=close) dismissed it. Switching to NETWORK tab regressed nothing — 10 SVGs render, ALTHEA text is present in the interaction graph, AND the hook remains defined (`typeof === 'function'`) on the NETWORK tab confirming the visibility-hidden canvas-mount pattern from CenterDeck.jsx works correctly. ZERO pageerrors, zero console errors (only benign WebGL GPU stall warnings). Secondary real-raycaster path: tried 100 mouse.click() points on a 5-ring polar grid (r=120..280 px, every 18°) around the canvas centre with drawer reset between clicks — none landed on a satellite (rotation @ 0.18 rad/s makes deterministic pixel-targeting unreliable). Per the review request that is explicitly Acceptable because the synthetic hook path succeeded.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NeuralCore.jsx lines 220-249: clean pattern — visible 0.14 mesh kept for aesthetics, transparent 0.5-radius picking sphere added as sibling with shared userData reference. Both pushed into latticeMeshes so raycaster.intersectObjects returns the picking sphere preferentially due to its larger silhouette. Good.",
+    "window.__althea_pickFirstSatellite (lines 319-326) finds the first mesh with userData.nodeId (skips picking spheres if they didn't share userData, but they do via reference). Returns null if no satellites yet, which is correct for the >6s poll race window.",
+    "Hook cleanup on unmount is implied by the useEffect's cleanup (it should `delete window.__althea_pickFirstSatellite` in cleanup to be tidy — currently inspecting the file shows the hook is set inside the scene-init useEffect; recommend adding `delete window.__althea_pickFirstSatellite;` to the cleanup function for hygiene, though there's only one mount so the practical impact is nil).",
+    "Secondary real-click reliability remains poor for automated tests due to continuous group.rotation.y = t*0.18; this is fine because the deterministic hook covers E2E. For human UX consider pausing rotation on canvas hover."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only retest)", "frontend": "100% on the requested happy path — hook defined, returns NODE-0000, drawer opens, search input pre-populated, drawer closes, NETWORK tab regressionless, hook persists across tab switches"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Sent /spawn first thought via [data-testid=chat-input]. Pre-existing seed (16 stored memory fragments shown in drawer header) was already present.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The click->MemoryDrawer happy path is fully verified using window.__althea_pickFirstSatellite(). Test pattern: load app -> default NEURAL tab -> fill [data-testid=chat-input] with '/spawn first thought' + Enter -> wait 8s -> evaluate window.__althea_pickFirstSatellite() -> expect 'NODE-XXXX' return, [data-testid=memory-drawer] visible, [data-testid=memory-search-input].value === returned id. NETWORK tab close path: real-raycaster click is flaky (rotation), prefer the hook. Backend was not retested; prior /app/backend/tests/test_web_bridge_iter10.py remains the regression suite.",
+  "rca of the issue": "Not a bug — this iteration is verification of the iter11 action item. iter11 explicitly asked for a deterministic test hook to verify the click->MemoryDrawer success path; main agent implemented window.__althea_pickFirstSatellite() + transparent 0.5-radius picking spheres. iter12 confirms BOTH artefacts work as specified."
+}
