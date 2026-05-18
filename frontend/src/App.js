@@ -38,6 +38,20 @@ function App() {
     const [observationUrl, setObservationUrl] = useState("");
     const [watchLog, setWatchLog] = useState([]);
     const [memoryOpen, setMemoryOpen] = useState(false);
+    const [memoryInitialQuery, setMemoryInitialQuery] = useState("");
+
+    const openMemoryWithQuery = useCallback((query) => {
+        setMemoryInitialQuery(query || "");
+        setMemoryOpen(true);
+    }, []);
+
+    const handleLatticeNodeClick = useCallback(
+        (userData) => {
+            if (!userData?.nodeId) return;
+            openMemoryWithQuery(userData.nodeId);
+        },
+        [openMemoryWithQuery],
+    );
 
     const watchUrl = useCallback(
         async (url) => {
@@ -268,7 +282,7 @@ function App() {
                         geo={geo}
                         bootMessages={bootMessages}
                         watchUrl={watchUrl}
-                        openMemory={() => setMemoryOpen(true)}
+                        openMemory={() => openMemoryWithQuery("")}
                         observation={observationMeta}
                         activeTab={centerTab}
                     />
@@ -282,6 +296,7 @@ function App() {
                         setObservationUrl={watchUrl}
                         watchLog={watchLog}
                         observationMeta={observationMeta}
+                        onLatticeNodeClick={handleLatticeNodeClick}
                     />
                 </div>
                 <div className="md:col-span-3 min-h-0">
@@ -301,6 +316,7 @@ function App() {
             <MemoryDrawer
                 open={memoryOpen}
                 onClose={() => setMemoryOpen(false)}
+                initialQuery={memoryInitialQuery}
             />
         </div>
     );

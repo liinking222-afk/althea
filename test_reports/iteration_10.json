@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 10 testing: validated Web Bridge endpoint, Network Graph endpoint, NETWORK center tab, and click-satellite-to-memory wiring. Backend 57/57 passing (8 new + 49 regression). Frontend NETWORK tab + Bridge fetch UI works perfectly. CRITICAL: click-satellite-to-memory feature is BROKEN due to missing prop destructure and missing onClickRef declaration in NeuralCore.jsx — clicking the canvas raises 'onClickRef is not defined' runtime error.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "NeuralCore.jsx",
+        "issue": "Runtime error 'onClickRef is not defined' fires on EVERY canvas click. The component signature is `const NeuralCore = ({ introspection, embed })` — the `onLatticeNodeClick` prop is NOT destructured, and there is no `onClickRef = useRef()` / sync useEffect anywhere in the file. So `onClickRef.current(...)` at line 292-293 of NeuralCore.jsx throws ReferenceError. Click-satellite-to-memory therefore never opens the MemoryDrawer. Visible to the user as the red 'Uncaught runtime errors:' overlay.",
+        "selector": "canvas (in NEURAL tab)",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "click satellite -> MemoryDrawer opens with NODE id prefilled",
+        "issue": "Integration broken at NeuralCore.jsx layer. App.js correctly passes `onLatticeNodeClick={handleLatticeNodeClick}` and MemoryDrawer correctly accepts `initialQuery` and syncs to search input on open (verified by reading code), but NeuralCore never invokes the callback because of the ReferenceError above.",
+        "affected_selectors": ["canvas", "[data-testid=memory-drawer]", "[data-testid=memory-search-input]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_web_bridge_iter10.py",
+    "/app/test_reports/pytest/iter10_web_bridge.xml",
+    "/app/test_reports/pytest/iter10_full.xml"
+  ],
+  "action_items": [
+    "FIX NeuralCore.jsx: (1) destructure `onLatticeNodeClick` from props, (2) add `const onClickRef = useRef(onLatticeNodeClick);` plus a `useEffect(() => { onClickRef.current = onLatticeNodeClick; }, [onLatticeNodeClick]);` so the latest callback is always callable from the imperative three.js click handler. Without this, the entire click-satellite feature is dead and a runtime error fires on every canvas click."
+  ],
+  "critical_code_review_comments": [
+    "NeuralCore.jsx references `onClickRef.current` but never declares the ref nor destructures `onLatticeNodeClick` from props. The 'onClickRef pattern' described in the agent-to-agent context was not implemented.",
+    "web_bridge.py: `fetch_failed:{e}` leaks the raw exception string into HTTPException detail — fine for debugging but consider trimming or categorising (timeout vs DNS vs connection).",
+    "web_bridge.py network_graph aggregator iterates `db.althea_memories.find({tags:'bridge'})` and looks for any tag containing '.' — collides with any unrelated tag containing a dot. Low risk today, but constrain to (tag != 'bridge' and tag != 'web') for safety.",
+    "NetworkScreen.jsx: data-testid for host nodes ends up as `network-node-host:example.com` which contains a `:` and `.` — works in CSS attr selectors but is fragile. Consider sanitising.",
+    "NetworkScreen.jsx: positions for nodes are recomputed every render with mutating `groupCounts[n.type]++` — works because of strict ordering, but a useMemo over `graph` would be cleaner."
+  ],
+  "updated_files": ["/app/backend/tests/test_web_bridge_iter10.py"],
+  "success_rate": {"backend": "100% (57/57)", "frontend": "~80% — NETWORK tab + bridge fetch + graph rendering all PASS; click-satellite-to-memory FAIL (runtime ReferenceError)"},
+  "seed_data_creation": "Tests seed OPTIC peripheral via /api/lattice/perception, 2 lattice nodes via /api/lattice/nodes, and 3 example.com bridge fetches via /api/bridge/web. Cleanup not implemented — data persists between runs (network graph already contains www.youtube.com and en.wikipedia.org from earlier iterations).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After main agent patches NeuralCore.jsx to declare onClickRef and destructure onLatticeNodeClick, re-run a playwright test that: (1) opens NEURAL tab, (2) spawns a lattice node via terminal `/spawn first thought`, (3) waits 6-8s for the satellite poll, (4) clicks multiple offsets around the canvas centre to hit a cyan sphere with the raycaster, (5) asserts [data-testid=memory-drawer] opens and [data-testid=memory-search-input] value starts with 'NODE-'. Backend tests file at /app/backend/tests/test_web_bridge_iter10.py is reusable.",
+  "rca of the issue": "ROOT CAUSE: NeuralCore.jsx was supposed to receive `onLatticeNodeClick` and proxy it through an `onClickRef` to keep the three.js click handler synchronised with the latest React prop. The agent-to-agent note in the request says `onClickRef pattern used so latest prop is always available` but the actual code only contains the consumer (line 292-293: `if (hits.length && onClickRef.current) onClickRef.current(...)`) without the producer (the useRef declaration + useEffect sync) or even destructuring the prop from the component signature. REPRO: open the app, switch to NEURAL tab (default), click anywhere on the 3D canvas → red 'Uncaught runtime errors' overlay appears with 'ReferenceError: onClickRef is not defined at HTMLCanvasElement.onCanvasClick'. MITIGATION: in /app/frontend/src/components/NeuralCore.jsx — change `const NeuralCore = ({ introspection, embed }) => {` to `const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {` and inside the component add `const onClickRef = useRef(onLatticeNodeClick);` then `useEffect(() => { onClickRef.current = onLatticeNodeClick; }, [onLatticeNodeClick]);` before the main three.js useEffect."
+}

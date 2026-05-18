@@ -224,6 +224,8 @@ const NeuralCore = ({ introspection, embed }) => {
                     mesh.userData = {
                         seed: idx * 0.41 + 0.13,
                         activation: n.activation ?? 1.0,
+                        nodeId: n.id,
+                        trace: n.memory_trace || "",
                     };
                     latticeGroup.add(mesh);
                     latticeMeshes.push(mesh);
@@ -264,6 +266,35 @@ const NeuralCore = ({ introspection, embed }) => {
         renderer.domElement.addEventListener("mousedown", onDown);
         window.addEventListener("mouseup", onUp);
         window.addEventListener("mousemove", onMove);
+
+        // Raycaster for clicking the cyan lattice satellites
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let downX = 0;
+        let downY = 0;
+        const onCanvasMouseDown = (e) => {
+            downX = e.clientX;
+            downY = e.clientY;
+        };
+        const onCanvasClick = (e) => {
+            // ignore drags
+            if (
+                Math.abs(e.clientX - downX) > 5 ||
+                Math.abs(e.clientY - downY) > 5
+            )
+                return;
+            if (!latticeMeshes.length) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+            const hits = raycaster.intersectObjects(latticeMeshes, false);
+            if (hits.length && onClickRef.current) {
+                onClickRef.current(hits[0].object.userData);
+            }
+        };
+        renderer.domElement.addEventListener("mousedown", onCanvasMouseDown);
+        renderer.domElement.addEventListener("click", onCanvasClick);
 
         const animate = () => {
             raf = requestAnimationFrame(animate);
@@ -310,6 +341,8 @@ const NeuralCore = ({ introspection, embed }) => {
             window.removeEventListener("mouseup", onUp);
             window.removeEventListener("mousemove", onMove);
             renderer.domElement.removeEventListener("mousedown", onDown);
+            renderer.domElement.removeEventListener("mousedown", onCanvasMouseDown);
+            renderer.domElement.removeEventListener("click", onCanvasClick);
             renderer.dispose();
             if (mount.contains(renderer.domElement)) {
                 mount.removeChild(renderer.domElement);

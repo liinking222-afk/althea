@@ -1,6 +1,7 @@
 import React from "react";
 import NeuralCore from "@/components/NeuralCore";
 import ObservationScreen from "@/components/ObservationScreen";
+import NetworkScreen from "@/components/NetworkScreen";
 
 const CenterDeck = ({
     tab,
@@ -10,6 +11,7 @@ const CenterDeck = ({
     setObservationUrl,
     watchLog,
     observationMeta,
+    onLatticeNodeClick,
 }) => {
     return (
         <section
@@ -22,7 +24,9 @@ const CenterDeck = ({
                     <h2 className="heading text-sm tracking-widest uppercase">
                         {tab === "neural"
                             ? "neural core // live lattice"
-                            : "observation // optical input"}
+                            : tab === "observe"
+                              ? "observation // optical input"
+                              : "network // interaction graph"}
                     </h2>
                 </div>
                 <div className="flex items-center gap-1">
@@ -38,6 +42,12 @@ const CenterDeck = ({
                         testid="center-tab-observe"
                         label="observe"
                     />
+                    <TabBtn
+                        active={tab === "network"}
+                        onClick={() => setTab("network")}
+                        testid="center-tab-network"
+                        label="network"
+                    />
                 </div>
             </header>
 
@@ -48,7 +58,11 @@ const CenterDeck = ({
                         visibility: tab === "neural" ? "visible" : "hidden",
                     }}
                 >
-                    <NeuralCore introspection={introspection} embed />
+                    <NeuralCore
+                        introspection={introspection}
+                        embed
+                        onLatticeNodeClick={onLatticeNodeClick}
+                    />
                 </div>
                 {tab === "observe" && (
                     <div className="absolute inset-0">
@@ -58,6 +72,11 @@ const CenterDeck = ({
                             watchLog={watchLog}
                             meta={observationMeta}
                         />
+                    </div>
+                )}
+                {tab === "network" && (
+                    <div className="absolute inset-0">
+                        <NetworkScreen />
                     </div>
                 )}
             </div>

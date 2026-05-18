@@ -3,10 +3,15 @@ import axios from "axios";
 import { Trash2, X } from "lucide-react";
 import { API } from "@/App";
 
-const MemoryDrawer = ({ open, onClose }) => {
+const MemoryDrawer = ({ open, onClose, initialQuery }) => {
     const [memories, setMemories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [query, setQuery] = useState("");
+
+    // Sync incoming initialQuery whenever the drawer opens
+    useEffect(() => {
+        if (open) setQuery(initialQuery || "");
+    }, [open, initialQuery]);
 
     const load = useCallback(async () => {
         setLoading(true);
