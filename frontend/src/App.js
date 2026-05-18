@@ -297,6 +297,9 @@ function App() {
                         watchLog={watchLog}
                         observationMeta={observationMeta}
                         onLatticeNodeClick={handleLatticeNodeClick}
+                        onCognitiveNodeClick={(nodeId) =>
+                            openMemoryWithQuery(nodeId)
+                        }
                     />
                 </div>
                 <div className="md:col-span-3 min-h-0">

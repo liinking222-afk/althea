@@ -183,3 +183,22 @@ class BridgeRequest(BaseModel):
     target_ip: str
     protocol: Optional[str] = "SSH"
 
+
+# ---------- Network Profiles (Wi-Fi manifest) ----------
+class NetworkProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    ssid: str
+    security: str = "WPA2"  # WPA2 | WPA3 | OPEN | WEP
+    label: Optional[str] = None
+    has_password: bool = False
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NetworkProfileCreate(BaseModel):
+    ssid: str
+    security: Optional[str] = "WPA2"
+    password: Optional[str] = None
+    label: Optional[str] = None
+
+

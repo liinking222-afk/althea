@@ -18,7 +18,7 @@ const TYPE_RADIUS = {
     reflection: 360,
 };
 
-const NetworkScreen = () => {
+const NetworkScreen = ({ onHostClick, onCognitiveNodeClick }) => {
     const [graph, setGraph] = useState(null);
     const [hover, setHover] = useState(null);
     const [bridging, setBridging] = useState(false);
@@ -189,15 +189,51 @@ const NetworkScreen = () => {
                             n.type === "core"
                                 ? 14
                                 : 5 + (n.weight || 1) * 1.5;
+                        const handleClick = () => {
+                            if (n.type === "host") {
+                                // bridge fetch this host directly
+                                setBridgeInput(`https://${n.label}/`);
+                                setBridging(true);
+                                setBridgeResult(null);
+                                axios
+                                    .post(`${API}/bridge/web`, {
+                                        url: `https://${n.label}/`,
+                                    })
+                                    .then((res) => {
+                                        setBridgeResult(res.data);
+                                        refresh();
+                                    })
+                                    .catch((error) =>
+                                        setBridgeResult({
+                                            host: n.label,
+                                            status: 0,
+                                            title: null,
+                                            description: `fetch failed: ${error.message}`,
+                                        }),
+                                    )
+                                    .finally(() => setBridging(false));
+                            } else if (n.type === "cognitive" && onCognitiveNodeClick) {
+                                onCognitiveNodeClick(n.label);
+                            }
+                        };
                         return (
                             <g
                                 key={n.id}
                                 transform={`translate(${p.x},${p.y})`}
                                 onMouseEnter={() => setHover(n)}
                                 onMouseLeave={() => setHover(null)}
-                                style={{ cursor: "pointer" }}
+                                onClick={handleClick}
+                                style={{
+                                    cursor:
+                                        n.type === "host" ||
+                                        n.type === "cognitive"
+                                            ? "pointer"
+                                            : "default",
+                                }}
                                 data-testid={`network-node-${n.id}`}
                             >
+                                {/* invisible larger picking circle for easier click */}
+                                <circle r={Math.max(r + 4, 10)} fill="transparent" />
                                 <circle
                                     r={r}
                                     fill={color}

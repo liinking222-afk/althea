@@ -2,6 +2,14 @@ import React from "react";
 import NeuralCore from "@/components/NeuralCore";
 import ObservationScreen from "@/components/ObservationScreen";
 import NetworkScreen from "@/components/NetworkScreen";
+import ConnectScreen from "@/components/ConnectScreen";
+
+const TAB_LABELS = {
+    neural: "neural core // live lattice",
+    observe: "observation // optical input",
+    network: "network // interaction graph",
+    connect: "connect // device + wi-fi bridge",
+};
 
 const CenterDeck = ({
     tab,
@@ -12,6 +20,8 @@ const CenterDeck = ({
     watchLog,
     observationMeta,
     onLatticeNodeClick,
+    onHostClick,
+    onCognitiveNodeClick,
 }) => {
     return (
         <section
@@ -22,41 +32,21 @@ const CenterDeck = ({
                 <div className="flex items-center gap-2">
                     <div className="dot" />
                     <h2 className="heading text-sm tracking-widest uppercase">
-                        {tab === "neural"
-                            ? "neural core // live lattice"
-                            : tab === "observe"
-                              ? "observation // optical input"
-                              : "network // interaction graph"}
+                        {TAB_LABELS[tab] || "core"}
                     </h2>
                 </div>
-                <div className="flex items-center gap-1">
-                    <TabBtn
-                        active={tab === "neural"}
-                        onClick={() => setTab("neural")}
-                        testid="center-tab-neural"
-                        label="neural"
-                    />
-                    <TabBtn
-                        active={tab === "observe"}
-                        onClick={() => setTab("observe")}
-                        testid="center-tab-observe"
-                        label="observe"
-                    />
-                    <TabBtn
-                        active={tab === "network"}
-                        onClick={() => setTab("network")}
-                        testid="center-tab-network"
-                        label="network"
-                    />
+                <div className="flex items-center gap-1 flex-wrap">
+                    <TabBtn active={tab === "neural"} onClick={() => setTab("neural")} testid="center-tab-neural" label="neural" />
+                    <TabBtn active={tab === "observe"} onClick={() => setTab("observe")} testid="center-tab-observe" label="observe" />
+                    <TabBtn active={tab === "network"} onClick={() => setTab("network")} testid="center-tab-network" label="network" />
+                    <TabBtn active={tab === "connect"} onClick={() => setTab("connect")} testid="center-tab-connect" label="connect" />
                 </div>
             </header>
 
             <div className="flex-1 relative min-h-0">
                 <div
                     className="absolute inset-0"
-                    style={{
-                        visibility: tab === "neural" ? "visible" : "hidden",
-                    }}
+                    style={{ visibility: tab === "neural" ? "visible" : "hidden" }}
                 >
                     <NeuralCore
                         introspection={introspection}
@@ -76,7 +66,15 @@ const CenterDeck = ({
                 )}
                 {tab === "network" && (
                     <div className="absolute inset-0">
-                        <NetworkScreen />
+                        <NetworkScreen
+                            onHostClick={onHostClick}
+                            onCognitiveNodeClick={onCognitiveNodeClick}
+                        />
+                    </div>
+                )}
+                {tab === "connect" && (
+                    <div className="absolute inset-0">
+                        <ConnectScreen />
                     </div>
                 )}
             </div>

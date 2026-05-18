@@ -1,4 +1,5 @@
-"""Web Bridge: fetch real web pages + expose an interaction-network graph."""
+"""Web Bridge: fetch real web pages + expose an interaction-network graph + Wi-Fi profile manifest."""
+import hashlib
 import logging
 import re
 from datetime import datetime, timezone
@@ -10,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from core import db
-from models import Memory
+from models import Memory, NetworkProfile, NetworkProfileCreate
 
 router = APIRouter()
 
@@ -237,3 +238,82 @@ async def network_graph():
         edges=edges,
         generated_at=datetime.now(timezone.utc).isoformat(),
     )
+
+
+# ---------- Wi-Fi Profile Manifest ----------
+@router.post("/network/profile", response_model=NetworkProfile)
+async def create_network_profile(req: NetworkProfileCreate):
+    """Register a Wi-Fi SSID profile. The browser cannot actually JOIN a
+    Wi-Fi network, but the profile is recorded as a peripheral_link in the
+    cognitive lattice so Althea remembers it."""
+    ssid = (req.ssid or "").strip()
+    if not ssid:
+        raise HTTPException(status_code=400, detail="empty_ssid")
+    security = (req.security or "WPA2").strip().upper()
+    has_password = bool(req.password)
+    profile = NetworkProfile(
+        ssid=ssid,
+        security=security,
+        label=(req.label or "").strip() or None,
+        has_password=has_password,
+    )
+    doc = profile.model_dump()
+    doc["timestamp"] = doc["timestamp"].isoformat()
+    # Store a hash of password if provided, never the plaintext.
+    if has_password:
+        doc["password_hash"] = hashlib.sha256(req.password.encode()).hexdigest()
+    await db.althea_network_profiles.update_one(
+        {"ssid": ssid}, {"$set": doc}, upsert=True
+    )
+
+    # Register as a peripheral link so it shows up in the lattice + graph.
+    await db.althea_peripheral.update_one(
+        {"modality": f"WIFI:{ssid[:16]}"},
+        {"$set": {
+            "modality": f"WIFI:{ssid[:16]}",
+            "endpoint": f"ssid://{ssid} [{security}]",
+            "status": "DECLARED",
+            "last_signal": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+    # Log as a memory
+    mem = Memory(
+        content=(
+            f"[NETWORK-PROFILE] declared ssid='{ssid}' security={security} "
+            f"password={'set' if has_password else 'open'}. "
+            "NOTE: browsers cannot join wi-fi natively — profile recorded only."
+        ),
+        source="bridge",
+        tags=["wifi", "profile", security.lower()],
+    )
+    m_doc = mem.model_dump()
+    m_doc["timestamp"] = m_doc["timestamp"].isoformat()
+    await db.althea_memories.insert_one(m_doc)
+    return profile
+
+
+@router.get("/network/profiles", response_model=List[NetworkProfile])
+async def list_network_profiles():
+    docs = await db.althea_network_profiles.find(
+        {}, {"_id": 0, "password_hash": 0}
+    ).sort("timestamp", -1).to_list(200)
+    for d in docs:
+        if isinstance(d.get("timestamp"), str):
+            d["timestamp"] = datetime.fromisoformat(d["timestamp"])
+    return docs
+
+
+@router.delete("/network/profile/{profile_id}")
+async def delete_network_profile(profile_id: str):
+    doc = await db.althea_network_profiles.find_one(
+        {"id": profile_id}, {"_id": 0, "ssid": 1}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="not_found")
+    await db.althea_network_profiles.delete_one({"id": profile_id})
+    await db.althea_peripheral.delete_one(
+        {"modality": f"WIFI:{doc['ssid'][:16]}"}
+    )
+    return {"deleted": profile_id}
