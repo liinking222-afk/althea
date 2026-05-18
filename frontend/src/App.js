@@ -8,6 +8,7 @@ import CenterDeck from "@/components/CenterDeck";
 import TelemetryPanel from "@/components/TelemetryPanel";
 import CommandBar from "@/components/CommandBar";
 import MemoryDrawer from "@/components/MemoryDrawer";
+import VisualPerception from "@/components/VisualPerception";
 import { SYSTEM_CAPABILITIES } from "@/lib/systemMap";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -39,6 +40,26 @@ function App() {
     const [watchLog, setWatchLog] = useState([]);
     const [memoryOpen, setMemoryOpen] = useState(false);
     const [memoryInitialQuery, setMemoryInitialQuery] = useState("");
+    const [growth, setGrowth] = useState(null);
+
+    // Poll growth stats every 5s
+    useEffect(() => {
+        let cancelled = false;
+        const fetchGrowth = async () => {
+            try {
+                const res = await axios.get(`${API}/growth/stats`);
+                if (!cancelled) setGrowth(res.data);
+            } catch (_) {
+                /* ignore */
+            }
+        };
+        fetchGrowth();
+        const t = setInterval(fetchGrowth, 5000);
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+        };
+    }, []);
 
     const openMemoryWithQuery = useCallback((query) => {
         setMemoryInitialQuery(query || "");
@@ -265,6 +286,7 @@ function App() {
     return (
         <div
             className="althea-app flex flex-col"
+            id="althea-container"
             data-testid="althea-root"
         >
             <TopBar
@@ -272,6 +294,17 @@ function App() {
                 sessionId={sessionId}
                 onReset={resetSession}
                 introspection={introspection}
+                growth={growth}
+                visionSlot={
+                    <VisualPerception
+                        uiState={{
+                            active_tab: centerTab,
+                            online,
+                            memory_count: growth?.memories,
+                            session_id: sessionId,
+                        }}
+                    />
+                }
             />
             <main className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3 px-3 pb-3 min-h-0">
                 <div className="md:col-span-3 min-h-0">

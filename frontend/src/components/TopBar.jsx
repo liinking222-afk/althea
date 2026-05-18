@@ -1,6 +1,6 @@
 import React from "react";
 
-const TopBar = ({ online, sessionId, onReset, introspection }) => {
+const TopBar = ({ online, sessionId, onReset, introspection, growth, visionSlot }) => {
     const integrity = introspection
         ? (introspection.integrity * 100).toFixed(2)
         : "--.--";
@@ -60,11 +60,20 @@ const TopBar = ({ online, sessionId, onReset, introspection }) => {
             <div className="flex items-center gap-6">
                 <Metric label="integrity" value={`${integrity}%`} />
                 <Metric label="coherence" value={`${coherence}%`} />
+                {growth && (
+                    <div className="leading-none hidden lg:block" data-testid="growth-readout">
+                        <div className="label text-[9px]">growth</div>
+                        <div className="heading text-sm mt-1 text-[#CCFF00] glow">
+                            m:{growth.memories}·l:{growth.lattice_nodes}·t:{growth.active_threads}
+                        </div>
+                    </div>
+                )}
                 <Metric
                     label="link"
                     value={online ? "ONLINE" : "OFFLINE"}
                     accent={!online}
                 />
+                {visionSlot}
                 <button
                     onClick={onReset}
                     data-testid="althea-reset-session-btn"

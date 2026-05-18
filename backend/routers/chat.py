@@ -12,6 +12,7 @@ from models import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    CognitiveNode,
     IntrospectionResponse,
     Memory,
     NeuralEdge,
@@ -19,7 +20,7 @@ from models import (
     NeuralState,
 )
 from system_prompt import ALTHEA_SYSTEM_PROMPT
-from utils import build_context_block
+from utils import build_context_block, next_node_id
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -112,6 +113,27 @@ async def chat(req: ChatRequest):
     althea_doc = althea_msg.model_dump()
     althea_doc["timestamp"] = althea_doc["timestamp"].isoformat()
     await db.althea_messages.insert_one(althea_doc)
+
+    # Infinite-growth chain: every chat spawns a cognitive node linked to the
+    # previous chat-tagged node, forming an ever-extending reasoning thread.
+    try:
+        last = await db.althea_nodes.find_one(
+            {"memory_trace": {"$regex": "^\\[CHAT"}},
+            sort=[("timestamp", -1)],
+            projection={"_id": 0, "id": 1},
+        )
+        nid = await next_node_id(db)
+        node = CognitiveNode(
+            id=nid,
+            activation=1.0,
+            parent_id=last["id"] if last else None,
+            memory_trace=f"[CHAT session:{session_id[:8]}] op:'{req.message[:80]}' → althea:'{reply_text[:100]}'",
+        )
+        n_doc = node.model_dump()
+        n_doc["timestamp"] = n_doc["timestamp"].isoformat()
+        await db.althea_nodes.insert_one(n_doc)
+    except Exception:
+        logging.exception("chat chain-node spawn failed")
 
     return ChatResponse(
         session_id=session_id,
