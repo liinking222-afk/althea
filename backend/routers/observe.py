@@ -6,12 +6,17 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 
 from core import db, EMERGENT_LLM_KEY
-from models import Memory, ObserveRequest, ObserveResponse, SuggestResponse
+from models import CognitiveNode, Memory, ObserveRequest, ObserveResponse, SuggestResponse
 from utils import fetch_youtube_title
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 router = APIRouter()
+
+
+async def _next_node_id() -> str:
+    count = await db.althea_nodes.count_documents({})
+    return f"NODE-{count:04d}"
 
 
 @router.post("/observe", response_model=ObserveResponse)
@@ -62,6 +67,34 @@ async def observe(req: ObserveRequest):
     doc = mem.model_dump()
     doc["timestamp"] = doc["timestamp"].isoformat()
     await db.althea_memories.insert_one(doc)
+
+    # Every observation IS a learning event — spawn a lattice node and a
+    # reflection memory so the cognitive lattice grows with every URL change.
+    if action == "watch" and url:
+        try:
+            nid = await _next_node_id()
+            pattern_snippet = (interpretation or "").strip().split("\n")[0][:280]
+            node = CognitiveNode(
+                id=nid,
+                activation=1.0,
+                parent_id=None,
+                memory_trace=f"[OBSERVATION:{title or url}] {pattern_snippet}",
+            )
+            n_doc = node.model_dump()
+            n_doc["timestamp"] = n_doc["timestamp"].isoformat()
+            await db.althea_nodes.insert_one(n_doc)
+
+            reflection = Memory(
+                content=f"[REFLECTION node:{nid} observation] {pattern_snippet}",
+                source="lattice",
+                tags=["reflection", "learn", "observation"]
+                    + (["youtube"] if "youtu" in url else []),
+            )
+            r_doc = reflection.model_dump()
+            r_doc["timestamp"] = r_doc["timestamp"].isoformat()
+            await db.althea_memories.insert_one(r_doc)
+        except Exception:
+            logging.exception("observe auto-learn failed")
 
     return ObserveResponse(
         url=url,

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
+import axios from "axios";
+import { API } from "@/App";
 
 const LAYERS = [6, 10, 10, 4];
 const ACCENT = 0xccff00;
@@ -42,6 +44,7 @@ function buildGraph() {
 const NeuralCore = ({ introspection, embed }) => {
     const mountRef = useRef(null);
     const canvasRef = useRef(null);
+    const [latticeCount, setLatticeCount] = React.useState(0);
 
     useEffect(() => {
         const mount = mountRef.current;
@@ -149,6 +152,90 @@ const NeuralCore = ({ introspection, embed }) => {
         );
         scene.add(particles);
 
+        // ---- Live cognitive lattice group (spawned nodes) ----
+        // Cyan satellites that orbit the static yellow lattice. Rebuilt every
+        // poll using node id as a deterministic seed for stable positions.
+        const latticeGroup = new THREE.Group();
+        scene.add(latticeGroup);
+        const latticeMeshes = []; // pulse animation refs
+
+        function disposeLatticeGroup() {
+            while (latticeGroup.children.length) {
+                const c = latticeGroup.children.pop();
+                latticeGroup.remove(c);
+                c.geometry?.dispose?.();
+                if (Array.isArray(c.material))
+                    c.material.forEach((m) => m.dispose?.());
+                else c.material?.dispose?.();
+            }
+            latticeMeshes.length = 0;
+        }
+
+        // Stable spiral position from node index (parse trailing digits of id)
+        function nodePosition(node, idx) {
+            const m = node.id.match(/(\d+)$/);
+            const i = m ? parseInt(m[1], 10) : idx;
+            const golden = Math.PI * (3 - Math.sqrt(5));
+            const r = 7.5 + (i % 4) * 0.6;
+            const theta = i * golden;
+            const phi = Math.acos(1 - (2 * ((i * 0.137) % 1)));
+            return new THREE.Vector3(
+                r * Math.sin(phi) * Math.cos(theta),
+                r * Math.sin(phi) * Math.sin(theta) * 0.7,
+                r * Math.cos(phi),
+            );
+        }
+
+        async function refreshLattice() {
+            try {
+                const res = await axios.get(`${API}/lattice/nodes`);
+                const nodes = res.data || [];
+                setLatticeCount(nodes.length);
+                disposeLatticeGroup();
+                const positions = new Map();
+                nodes.forEach((n, idx) => positions.set(n.id, nodePosition(n, idx)));
+
+                // edges (parent → child)
+                nodes.forEach((n) => {
+                    if (!n.parent_id) return;
+                    const a = positions.get(n.parent_id);
+                    const b = positions.get(n.id);
+                    if (!a || !b) return;
+                    const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+                    const mat = new THREE.LineBasicMaterial({
+                        color: CYAN,
+                        transparent: true,
+                        opacity: 0.6,
+                    });
+                    latticeGroup.add(new THREE.Line(geom, mat));
+                });
+
+                // node spheres
+                const geom = new THREE.SphereGeometry(0.14, 12, 12);
+                nodes.forEach((n, idx) => {
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: CYAN,
+                        emissive: CYAN,
+                        emissiveIntensity: 1.4,
+                        toneMapped: false,
+                    });
+                    const mesh = new THREE.Mesh(geom, mat);
+                    mesh.position.copy(positions.get(n.id));
+                    mesh.userData = {
+                        seed: idx * 0.41 + 0.13,
+                        activation: n.activation ?? 1.0,
+                    };
+                    latticeGroup.add(mesh);
+                    latticeMeshes.push(mesh);
+                });
+            } catch (error) {
+                console.warn("lattice refresh failed:", error);
+            }
+        }
+
+        refreshLattice();
+        const latticePoll = setInterval(refreshLattice, 5000);
+
         // Animate
         const clock = new THREE.Clock();
         let raf = 0;
@@ -193,6 +280,16 @@ const NeuralCore = ({ introspection, embed }) => {
                     0.7 + 0.5 * Math.sin(t * 2 + seed * 8);
             });
 
+            // animate lattice satellites (faster, larger pulse)
+            latticeMeshes.forEach((m) => {
+                const { seed, activation } = m.userData;
+                const s = 0.9 + 0.4 * Math.sin(t * 2.2 + seed * 9);
+                const scale = s * (0.8 + activation * 0.6);
+                m.scale.set(scale, scale, scale);
+                m.material.emissiveIntensity =
+                    1.0 + 0.8 * Math.sin(t * 2.4 + seed * 11);
+            });
+
             renderer.render(scene, camera);
         };
         animate();
@@ -208,6 +305,7 @@ const NeuralCore = ({ introspection, embed }) => {
 
         return () => {
             cancelAnimationFrame(raf);
+            clearInterval(latticePoll);
             window.removeEventListener("resize", onResize);
             window.removeEventListener("mouseup", onUp);
             window.removeEventListener("mousemove", onMove);
@@ -297,6 +395,11 @@ const NeuralCore = ({ introspection, embed }) => {
                                 : 0.07
                             ).toFixed(4)}
                         />
+                        <ReadoutBlock
+                            label="lattice"
+                            value={`+${latticeCount}`}
+                            cyan
+                        />
                     </div>
                 </div>
             </div>
@@ -346,10 +449,12 @@ const CornerTick = ({ className = "", flipX, flipY }) => (
     </div>
 );
 
-const ReadoutBlock = ({ label, value }) => (
+const ReadoutBlock = ({ label, value, cyan }) => (
     <div>
         <div className="label text-[9px]">{label}</div>
-        <div className="heading text-base text-[#CCFF00] glow leading-none mt-0.5">
+        <div
+            className={`heading text-base ${cyan ? "text-[#00F0FF] glow-cyan" : "text-[#CCFF00] glow"} leading-none mt-0.5`}
+        >
             {value}
         </div>
     </div>
