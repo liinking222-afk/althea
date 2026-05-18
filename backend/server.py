@@ -11,13 +11,20 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from core import CORS_ORIGINS, mongo_client  # noqa: E402
 from routers import (  # noqa: E402
+    browser,
     chat,
+    codegen,
     cognition,
+    desktop,
+    files,
     growth,
     lattice,
     memory,
+    notifications,
     observe,
     perception,
+    satellite,
+    server_ops,
     system,
     web_bridge,
 )
@@ -35,6 +42,13 @@ api_router.include_router(lattice.router)
 api_router.include_router(web_bridge.router)
 api_router.include_router(perception.router)
 api_router.include_router(growth.router)
+api_router.include_router(notifications.router)
+api_router.include_router(files.router)
+api_router.include_router(browser.router)
+api_router.include_router(server_ops.router)
+api_router.include_router(satellite.router)
+api_router.include_router(codegen.router)
+api_router.include_router(desktop.router)
 
 app.include_router(api_router)
 

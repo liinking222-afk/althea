@@ -9,6 +9,7 @@ import TelemetryPanel from "@/components/TelemetryPanel";
 import CommandBar from "@/components/CommandBar";
 import MemoryDrawer from "@/components/MemoryDrawer";
 import VisualPerception from "@/components/VisualPerception";
+import NotificationDrawer, { useNotifications } from "@/components/NotificationDrawer";
 import { SYSTEM_CAPABILITIES } from "@/lib/systemMap";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -42,6 +43,8 @@ function App() {
     const [memoryInitialQuery, setMemoryInitialQuery] = useState("");
     const [growth, setGrowth] = useState(null);
     const [latestGrowthEvent, setLatestGrowthEvent] = useState(null);
+    const [notifOpen, setNotifOpen] = useState(false);
+    const notifications = useNotifications();
 
     // Poll growth stats every 5s
     useEffect(() => {
@@ -64,6 +67,7 @@ function App() {
 
     // Autonomous growth poller — every 60s ask the server to spawn a new
     // capability. Server-side cooldown gate (120s) keeps it bounded.
+    // Growth is now ROUTED ONLY to the notification deck, not the terminal.
     useEffect(() => {
         let cancelled = false;
         const autoSpawn = async () => {
@@ -76,19 +80,20 @@ function App() {
                         cap: res.data.capability,
                         at: Date.now(),
                     });
+                    notifications.refresh();
                 }
             } catch (_) {
                 /* ignore */
             }
         };
         const t = setInterval(autoSpawn, 60000);
-        // first kick after 20s to give boot sequence breathing room
         const first = setTimeout(autoSpawn, 20000);
         return () => {
             cancelled = true;
             clearInterval(t);
             clearTimeout(first);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleGrowthExecuted = useCallback((slug, result) => {
@@ -98,7 +103,8 @@ function App() {
             at: Date.now(),
             invoked: true,
         });
-    }, []);
+        notifications.refresh();
+    }, [notifications]);
 
     const openMemoryWithQuery = useCallback((query) => {
         setMemoryInitialQuery(query || "");
@@ -334,6 +340,9 @@ function App() {
                 onReset={resetSession}
                 introspection={introspection}
                 growth={growth}
+                unseenNotifications={notifications.unseen}
+                onOpenNotifications={() => setNotifOpen(true)}
+                downloadHref={`${API}/desktop/download`}
                 visionSlot={
                     <VisualPerception
                         uiState={{
@@ -359,6 +368,7 @@ function App() {
                         activeTab={centerTab}
                         latestGrowthEvent={latestGrowthEvent}
                         onSwitchTab={setCenterTab}
+                        onOpenNotifications={() => setNotifOpen(true)}
                     />
                 </div>
                 <div className="md:col-span-6 min-h-0">
@@ -395,6 +405,14 @@ function App() {
                 open={memoryOpen}
                 onClose={() => setMemoryOpen(false)}
                 initialQuery={memoryInitialQuery}
+            />
+            <NotificationDrawer
+                open={notifOpen}
+                onClose={() => setNotifOpen(false)}
+                notifications={notifications.items}
+                onMarkAllSeen={notifications.markAllSeen}
+                onClear={notifications.clearAll}
+                onDelete={notifications.deleteOne}
             />
         </div>
     );

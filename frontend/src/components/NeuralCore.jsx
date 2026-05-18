@@ -46,6 +46,8 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
     const canvasRef = useRef(null);
     const onClickRef = useRef(onLatticeNodeClick);
     const [latticeCount, setLatticeCount] = React.useState(0);
+    const zoomRef = useRef({ z: 14, min: 4, max: 28, target: 14 });
+    const [zoomUi, setZoomUi] = React.useState(14);
 
     useEffect(() => {
         onClickRef.current = onLatticeNodeClick;
@@ -285,6 +287,28 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         window.addEventListener("mouseup", onUp);
         window.addEventListener("mousemove", onMove);
 
+        // Wheel zoom
+        const onWheel = (e) => {
+            e.preventDefault();
+            const delta = e.deltaY * 0.01;
+            zoomRef.current.target = Math.max(
+                zoomRef.current.min,
+                Math.min(zoomRef.current.max, zoomRef.current.target + delta),
+            );
+        };
+        renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+
+        // Imperative zoom hooks for the +/- buttons
+        window.__althea_zoom = (delta) => {
+            zoomRef.current.target = Math.max(
+                zoomRef.current.min,
+                Math.min(zoomRef.current.max, zoomRef.current.target + delta),
+            );
+        };
+        window.__althea_zoomReset = () => {
+            zoomRef.current.target = 14;
+        };
+
         // Raycaster for clicking the cyan lattice satellites
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
@@ -328,6 +352,14 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         const animate = () => {
             raf = requestAnimationFrame(animate);
             const t = clock.getElapsedTime();
+            // Smooth zoom toward target
+            const zr = zoomRef.current;
+            zr.z += (zr.target - zr.z) * 0.12;
+            camera.position.z = zr.z;
+            // Update zoom UI roughly 8x/sec
+            if (Math.abs(zr.target - zr.z) > 0.02) {
+                setZoomUi(zr.z);
+            }
             group.rotation.y = t * 0.18 + userYaw;
             group.rotation.x = Math.sin(t * 0.3) * 0.1 + userPitch;
             particles.rotation.y = t * 0.02;
@@ -372,6 +404,9 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             renderer.domElement.removeEventListener("mousedown", onDown);
             renderer.domElement.removeEventListener("mousedown", onCanvasMouseDown);
             renderer.domElement.removeEventListener("click", onCanvasClick);
+            renderer.domElement.removeEventListener("wheel", onWheel);
+            delete window.__althea_zoom;
+            delete window.__althea_zoomReset;
             renderer.dispose();
             if (mount.contains(renderer.domElement)) {
                 mount.removeChild(renderer.domElement);
@@ -462,6 +497,37 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                             value={`+${latticeCount}`}
                             cyan
                         />
+                    </div>
+
+                    {/* Zoom controls */}
+                    <div className="absolute bottom-4 right-4 flex flex-col gap-1 pointer-events-auto">
+                        <button
+                            onClick={() => window.__althea_zoom?.(-2)}
+                            data-testid="neural-zoom-in"
+                            title="zoom in (or scroll wheel)"
+                            className="w-8 h-8 border border-[#CCFF00]/40 text-[#CCFF00] hover:bg-[#CCFF00]/10 heading text-lg leading-none"
+                        >
+                            +
+                        </button>
+                        <button
+                            onClick={() => window.__althea_zoomReset?.()}
+                            data-testid="neural-zoom-reset"
+                            title="reset zoom"
+                            className="w-8 h-6 border border-white/15 text-[#888] hover:text-[#CCFF00] hover:border-[#CCFF00]/40 heading text-[9px]"
+                        >
+                            ⌂
+                        </button>
+                        <button
+                            onClick={() => window.__althea_zoom?.(2)}
+                            data-testid="neural-zoom-out"
+                            title="zoom out"
+                            className="w-8 h-8 border border-[#CCFF00]/40 text-[#CCFF00] hover:bg-[#CCFF00]/10 heading text-lg leading-none"
+                        >
+                            −
+                        </button>
+                        <div className="text-center label text-[8px] text-[#666] mt-0.5" data-testid="neural-zoom-level">
+                            z{zoomUi.toFixed(0)}
+                        </div>
                     </div>
                 </div>
             </div>

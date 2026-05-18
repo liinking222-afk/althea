@@ -1,6 +1,18 @@
 import React from "react";
+import { Download } from "lucide-react";
+import { NotificationBell } from "@/components/NotificationDrawer";
 
-const TopBar = ({ online, sessionId, onReset, introspection, growth, visionSlot }) => {
+const TopBar = ({
+    online,
+    sessionId,
+    onReset,
+    introspection,
+    growth,
+    visionSlot,
+    unseenNotifications = 0,
+    onOpenNotifications,
+    downloadHref,
+}) => {
     const integrity = introspection
         ? (introspection.integrity * 100).toFixed(2)
         : "--.--";
@@ -42,7 +54,7 @@ const TopBar = ({ online, sessionId, onReset, introspection, growth, visionSlot 
                             ALTHEA
                         </div>
                         <div className="label text-[9px] mt-0.5">
-                            sovereign cognition // v0.9-alpha
+                            sovereign cognition // v1.0
                         </div>
                     </div>
                 </div>
@@ -57,14 +69,14 @@ const TopBar = ({ online, sessionId, onReset, introspection, growth, visionSlot 
                 </div>
             </div>
 
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 flex-wrap">
                 <Metric label="integrity" value={`${integrity}%`} />
                 <Metric label="coherence" value={`${coherence}%`} />
                 {growth && (
                     <div className="leading-none hidden lg:block" data-testid="growth-readout">
                         <div className="label text-[9px]">growth</div>
                         <div className="heading text-sm mt-1 text-[#CCFF00] glow">
-                            m:{growth.memories}·l:{growth.lattice_nodes}·t:{growth.active_threads}
+                            m:{growth.memories}·l:{growth.lattice_nodes}·t:{growth.active_threads}·g:{growth.grown_capabilities ?? 0}
                         </div>
                     </div>
                 )}
@@ -74,6 +86,20 @@ const TopBar = ({ online, sessionId, onReset, introspection, growth, visionSlot 
                     accent={!online}
                 />
                 {visionSlot}
+                <NotificationBell
+                    unseenCount={unseenNotifications}
+                    onClick={onOpenNotifications}
+                />
+                <a
+                    href={downloadHref}
+                    download
+                    data-testid="althea-download-btn"
+                    title="download Althea desktop companion (tar.gz)"
+                    className="heading text-[10px] uppercase tracking-widest px-3 py-1.5 border border-[#00F0FF]/60 text-[#00F0FF] hover:bg-[#00F0FF]/10 transition-colors flex items-center gap-1"
+                >
+                    <Download size={11} />
+                    download
+                </a>
                 <button
                     onClick={onReset}
                     data-testid="althea-reset-session-btn"

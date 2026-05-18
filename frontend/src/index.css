@@ -269,6 +269,80 @@ input[type="checkbox"].althea-switch:checked::after {
     box-shadow: 0 0 8px var(--accent);
 }
 
+/* ───── Cyberpunk Terminal ─────────────────────────────────────── */
+.cyberpunk-term {
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(255, 42, 136, 0.06) 0%, transparent 55%),
+        radial-gradient(ellipse at 100% 100%, rgba(0, 240, 255, 0.05) 0%, transparent 50%),
+        linear-gradient(180deg, #050505 0%, #07070b 100%);
+    position: relative;
+    box-shadow: inset 0 0 60px rgba(255, 42, 136, 0.04);
+}
+.cyberpunk-term::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 42, 136, 0.025) 0px,
+            rgba(255, 42, 136, 0.025) 1px,
+            transparent 1px,
+            transparent 3px
+        );
+    animation: cyberScan 6s linear infinite;
+    z-index: 1;
+}
+.cyberpunk-term::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 12px;
+    pointer-events: none;
+    background: linear-gradient(
+        180deg,
+        rgba(255, 42, 136, 0) 0%,
+        rgba(255, 42, 136, 0.18) 50%,
+        rgba(255, 42, 136, 0) 100%
+    );
+    top: -12px;
+    animation: cyberSweep 7s linear infinite;
+    z-index: 2;
+    mix-blend-mode: screen;
+}
+.cyberpunk-term > * {
+    position: relative;
+    z-index: 3;
+}
+@keyframes cyberScan {
+    from { background-position: 0 0; }
+    to { background-position: 0 6px; }
+}
+@keyframes cyberSweep {
+    0% { top: -12px; }
+    100% { top: 100%; }
+}
+
+/* prompt marker flicker */
+.cyberpunk-term [data-testid="prompt-marker"] {
+    text-shadow: 0 0 6px currentColor, 0 0 14px currentColor;
+    animation: neonPulse 1.6s ease-in-out infinite;
+}
+@keyframes neonPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+/* Horizontal scroll for tabs */
+.althea-scroll-h::-webkit-scrollbar { height: 4px; }
+.althea-scroll-h::-webkit-scrollbar-track { background: transparent; }
+.althea-scroll-h::-webkit-scrollbar-thumb { background: rgba(204, 255, 0, 0.25); }
+.althea-scroll-h { scrollbar-width: thin; scrollbar-color: rgba(204, 255, 0, 0.25) transparent; }
+
+
+
 @layer base {
     * {
         box-sizing: border-box;

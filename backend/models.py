@@ -231,3 +231,87 @@ class GrowthExecuteRequest(BaseModel):
     args: Optional[str] = None
     session_id: Optional[str] = None
 
+
+# ---------- Notifications ----------
+class Notification(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    body: str = ""
+    category: str = "system"  # growth | insight | server | satellite | file | code | system | bridge
+    priority: str = "info"  # info | warn | critical
+    seen: bool = False
+    payload: Optional[dict] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NotificationCreate(BaseModel):
+    title: str
+    body: Optional[str] = ""
+    category: Optional[str] = "system"
+    priority: Optional[str] = "info"
+    payload: Optional[dict] = None
+
+
+# ---------- Files ----------
+class FileItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str
+    mime: str = "application/octet-stream"
+    size_bytes: int = 0
+    is_text: bool = False
+    text_preview: Optional[str] = None  # first 4KB if text
+    data_base64: Optional[str] = None  # full binary
+    tags: List[str] = []
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ---------- Browser ----------
+class BrowserFetchRequest(BaseModel):
+    url: str
+    session_id: Optional[str] = None
+
+
+# ---------- Server Diagnose / Connect ----------
+class ServerProbeRequest(BaseModel):
+    host: str
+    port: Optional[int] = None
+    protocol: Optional[str] = "https"  # https | http | ssh | ftp | redis | postgres | mongo
+
+
+class ServerConnection(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    host: str
+    port: Optional[int] = None
+    protocol: str = "https"
+    status: str = "STANDBY"  # STANDBY | REACHABLE | UNREACHABLE | GATED
+    latency_ms: Optional[float] = None
+    details: Optional[dict] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ---------- Code / Self-write ----------
+class CodeSnippet(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    language: str = "python"  # python | javascript | bash | typescript | rust | go | other
+    intent: str  # what althea was asked to build
+    code: str
+    explanation: Optional[str] = ""
+    applied: bool = False
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CodeGenerateRequest(BaseModel):
+    intent: str
+    language: Optional[str] = "python"
+    title: Optional[str] = None
+
+
+class CodeApplyRequest(BaseModel):
+    id: str
+
+

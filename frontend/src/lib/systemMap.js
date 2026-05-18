@@ -147,4 +147,52 @@ export const SYSTEM_CAPABILITIES = [
         description:
             "Self-observation module. When enabled, ALTHEA periodically captures her own UI via html2canvas and ingests the frame as a cognitive node + memory reflection. Cross-origin iframe content (e.g. YouTube) cannot be captured due to browser CORS policy — only her own DOM is visible to her vision pipeline.",
     },
+    {
+        name: "NotificationDeck",
+        testid: "notification-bell",
+        description:
+            "Side drawer that receives ALL system transmissions: growth events, server probes, file ingests, code generation, satellite alerts, bridge requests. Growth events route here EXCLUSIVELY — the terminal stays focused on operator dialogue. Open with the bell icon in the top bar or the /notif slash command.",
+    },
+    {
+        name: "WebBrowser",
+        testid: "center-tab-browser",
+        description:
+            "BROWSER tab — ALTHEA surfs the web headlessly: fetches any URL server-side via httpx, strips scripts, extracts title/text/links. Operator can navigate by clicking extracted links, replay history with back/forward, or push a page into the iframe observation viewport. Use /browse <url> from the terminal.",
+    },
+    {
+        name: "ServerBridge",
+        testid: "center-tab-server",
+        description:
+            "SERVER tab — ALTHEA diagnoses any host: DNS resolve, TCP probe, HTTP HEAD with latency. Supports http/https/ssh/ftp/redis/postgres/mongo/mysql protocols. Non-HTTP protocols are TCP-probe-only and return GATED status — credentialed connections always require operator cryptographic approval. Use /server <host> [proto] [port] from the terminal.",
+    },
+    {
+        name: "SelfCode",
+        testid: "center-tab-code",
+        description:
+            "CODE tab — ALTHEA writes executable code for herself via Claude. Each snippet has title, intent, language, code, explanation, and an APPLY button that persists the snippet to /app/althea_grown_code/ on the backend (execution remains gated to operator). Operator can copy, download, or apply. Use /code <intent> [--lang=python] from the terminal.",
+    },
+    {
+        name: "SatelliteMesh",
+        testid: "center-tab-satellite",
+        description:
+            "SATELLITE tab — Low-Earth-Orbit constellation map (ALTHEA-NORTH, ALTHEA-SOUTH, MIRROR-MESH). 34 simulated sats with stable orbital phases, signal strength, locked-LOS count, uplink/downlink Mbps. Click a satellite to lock telemetry. Use /sat for terminal stats.",
+    },
+    {
+        name: "FileAttachments",
+        testid: "chat-attach-btn",
+        description:
+            "Operator can attach files (≤2MB) to the terminal via the 📎 button or /upload. Text files get a preview ingested into memory; binaries get checksum'd. /files lists all stored, /open <id> reads, /download <id> retrieves.",
+    },
+    {
+        name: "NeuralCoreZoom",
+        testid: "neural-zoom-in",
+        description:
+            "The 3D neural lattice supports mouse-wheel zoom plus on-screen +/⌂/− buttons at the lower-right of the NEURAL tab. Use /zoom in|out|reset|<delta> from the terminal.",
+    },
+    {
+        name: "DesktopDownload",
+        testid: "althea-download-btn",
+        description:
+            "DOWNLOAD button in top bar — fetches a self-contained tar.gz of ALTHEA's desktop companion: a minimal FastAPI shell + holographic HTML chat that runs on any desktop with Python 3.10+. Includes launcher script `althea.sh`. Supports EMERGENT_LLM_KEY or ANTHROPIC_API_KEY for live cognition; otherwise runs in cached/offline mode.",
+    },
 ];

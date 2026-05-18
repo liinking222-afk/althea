@@ -25,6 +25,7 @@ from models import (
     GrowthSpawnRequest,
     Memory,
 )
+from routers.notifications import emit_notification
 from utils import next_node_id
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -169,6 +170,25 @@ async def spawn_capability(req: GrowthSpawnRequest):
     m_doc = mem.model_dump()
     m_doc["timestamp"] = m_doc["timestamp"].isoformat()
     await db.althea_memories.insert_one(m_doc)
+
+    # Route to notifications (growth lives on the notif screen, NOT the terminal).
+    await emit_notification(
+        title=f"faculty grown · /{cap.slug}",
+        body=(
+            f"{cap.name} ({cap.category})\n"
+            f"{cap.description}\n"
+            f"rationale: {cap.rationale}"
+        ),
+        category="growth",
+        priority="info" if trigger == "autonomous" else "warn",
+        payload={
+            "slug": cap.slug,
+            "name": cap.name,
+            "category": cap.category,
+            "trigger": cap.trigger,
+            "activation": cap.activation,
+        },
+    )
 
     return {"spawned": True, "capability": cap.model_dump(mode="json")}
 

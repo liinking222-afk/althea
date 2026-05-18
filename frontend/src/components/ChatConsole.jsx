@@ -15,6 +15,10 @@ const STATIC_SLASH = [
     "/perceive", "/forget-perception", "/learn", "/bridge",
     "/export-brain", "/speak",
     "/grow", "/grown", "/cull", "/run",
+    "/upload", "/files", "/open", "/download",
+    "/browse", "/server", "/sat", "/notif",
+    "/code", "/code-apply", "/code-list",
+    "/zoom",
 ];
 
 const ASCII_BANNER = `
@@ -61,6 +65,23 @@ const TAG_COLOR = {
     OFFLINE: "#FF8800",
     CACHED: "#FF8800",
     DEGRADED: "#FF2A2A",
+    FILE: "#FFD400",
+    "FILE-INGEST": "#FFD400",
+    "FILE-OPEN": "#FFD400",
+    UPLOAD: "#FFD400",
+    DOWNLOAD: "#FFD400",
+    BROWSER: "#00F0FF",
+    BROWSE: "#00F0FF",
+    SURF: "#00F0FF",
+    SERVER: "#FF8800",
+    "SERVER-PROBE": "#FF8800",
+    SAT: "#A29BFE",
+    SATELLITE: "#A29BFE",
+    CODE: "#CCFF00",
+    "CODE-GEN": "#CCFF00",
+    "CODE-APPLY": "#FF2A88",
+    NOTIF: "#FF2A88",
+    ZOOM: "#CCFF00",
 };
 
 const getMessageTag = (content) => {
@@ -80,11 +101,13 @@ const ChatConsole = ({
     activeTab,
     latestGrowthEvent,
     onSwitchTab,
+    onOpenNotifications,
 }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState("");
     const [sending, setSending] = useState(false);
     const [listening, setListening] = useState(false);
+    const fileInputRef = useRef(null);
     const [speakOn, setSpeakOn] = useState(() => {
         const v = localStorage.getItem("althea_tts");
         return v === null ? true : v === "1";
@@ -195,27 +218,26 @@ const ChatConsole = ({
         };
     }, []);
 
-    // Surface latest growth event as [GROWTH] terminal line
+    // Latest growth event — surface ONLY a tiny dispatch line in the terminal.
+    // Full growth details now live exclusively in the notification deck per
+    // operator mandate. Invoked-grown commands still produce their result here.
     useEffect(() => {
         if (!latestGrowthEvent) return;
         if (latestGrowthEvent.at === lastGrowthRef.current) return;
         lastGrowthRef.current = latestGrowthEvent.at;
         const cap = latestGrowthEvent.cap || {};
         if (latestGrowthEvent.invoked) {
+            // grown faculty actually invoked — operator wants to see the output
             pushSystem(
                 `[GROWN /${cap.slug}] ${latestGrowthEvent.result || "(no result)"}`,
                 ["GROWN"],
             );
         } else {
+            // autonomous spawn — no terminal noise; notification deck has details.
             pushSystem(
-                `[GROWTH-AUTONOMOUS] new faculty crystallized:\n` +
-                `  /${cap.slug} — ${cap.name}\n` +
-                `  category: ${cap.category}\n` +
-                `  ${cap.description}\n` +
-                `  rationale: ${cap.rationale}`,
-                ["GROWTH"],
+                `[NOTIF] new faculty crystallized — check notification deck (/notif or bell).`,
+                ["NOTIF"],
             );
-            if (speakOn) speak(`new faculty grown: ${cap.name}`);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [latestGrowthEvent]);
@@ -295,6 +317,7 @@ const ChatConsole = ({
                     "/status            full system report\n" +
                     "/clear             wipe terminal scrollback\n" +
                     "/capabilities      list all subsystems\n" +
+                    "/zoom in|out|reset zoom neural lattice\n" +
                     "── memory ───────────────────────────────\n" +
                     "/memory            list stored memories\n" +
                     "/remember <txt>    pin a memory\n" +
@@ -302,10 +325,16 @@ const ChatConsole = ({
                     "/clear-memory      wipe all memories\n" +
                     "/recall <q>        semantic search\n" +
                     "/concepts          memory cluster tags\n" +
-                    "── perception ───────────────────────────\n" +
+                    "── perception / browser ─────────────────\n" +
                     "/watch <url>       observe a page/video\n" +
                     "/stop-watch        clear viewport\n" +
                     "/suggest           althea picks what to watch\n" +
+                    "/browse <url>      althea surfs the web headless\n" +
+                    "── files ────────────────────────────────\n" +
+                    "/upload            attach a file (≤2MB)\n" +
+                    "/files             list attached files\n" +
+                    "/open <id>         read a file in terminal\n" +
+                    "/download <id>     download a stored file\n" +
                     "── cognition ────────────────────────────\n" +
                     "/think <focus>     spawn cognition thread\n" +
                     "/threads           list active threads\n" +
@@ -317,6 +346,13 @@ const ChatConsole = ({
                     "/forget-perception <M>\n" +
                     "/learn <stream>    pattern extraction\n" +
                     "/bridge <ip> [p]   gated remote node\n" +
+                    "── server / satellite ───────────────────\n" +
+                    "/server <host> [proto] [port]   probe a server\n" +
+                    "/sat                            satellite mesh stats\n" +
+                    "── self-code ────────────────────────────\n" +
+                    "/code <intent>     althea writes code\n" +
+                    "/code-list         list snippets\n" +
+                    "/code-apply <id>   persist snippet to disk\n" +
                     "── infinite growth ──────────────────────\n" +
                     "/grow [hint]       invent a new faculty NOW\n" +
                     "/grown             list grown faculties\n" +
@@ -324,6 +360,7 @@ const ChatConsole = ({
                     "/run <slug> <args> invoke a grown faculty\n" +
                     "/<grown-slug> <args>  shortcut for /run\n" +
                     "── i/o ──────────────────────────────────\n" +
+                    "/notif             open notification deck\n" +
                     "/export-brain      download snapshot\n" +
                     "/speak on|off      toggle voice output",
                     ["CMD"],
@@ -667,7 +704,7 @@ const ChatConsole = ({
                     ["BRIDGE-REQ"],
                 );
             } else if (cmd === "/grow") {
-                pushSystem("[GROWTH] inventing a new faculty...", ["GROWTH"]);
+                pushSystem("[GROWTH] dispatching autopoietic spawn — watch notification deck.", ["GROWTH"]);
                 const res = await axios.post(`${API}/growth/spawn`, {
                     trigger: "manual",
                     hint: rest || null,
@@ -676,11 +713,7 @@ const ChatConsole = ({
                 if (res.data.spawned) {
                     const c = res.data.capability;
                     pushSystem(
-                        `[GROWTH /${c.slug}] ${c.name} (${c.category})\n` +
-                        `  ${c.description}\n` +
-                        `  rationale: ${c.rationale}\n` +
-                        `  invoke with: /${c.slug} <args>  or  /run ${c.slug} <args>\n` +
-                        `  switch to AUTOPOIESIS tab to view all grown faculties.`,
+                        `[GROWTH-DISPATCH] /${c.slug} crystallized. details in NOTIFICATION DECK. invoke with: /${c.slug} <args>`,
                         ["GROWTH"],
                     );
                     onSwitchTab?.("growth");
@@ -742,6 +775,137 @@ const ChatConsole = ({
                 } catch (e) {
                     pushSystem(`[ERR] /${slug} not found or failed.`, ["ERR"]);
                 }
+            } else if (cmd === "/upload") {
+                // Trigger hidden file input — actual upload happens in onFileChange
+                fileInputRef.current?.click();
+                pushSystem("[UPLOAD] file picker opened. select a file ≤2MB.", ["UPLOAD"]);
+            } else if (cmd === "/files") {
+                const res = await axios.get(`${API}/files`);
+                const list = res.data || [];
+                if (!list.length) {
+                    pushSystem("[FILE] inbox empty. /upload to attach a file.", ["FILE"]);
+                } else {
+                    const lines = list.slice(0, 15).map((f, i) =>
+                        `${(i + 1).toString().padStart(2, "0")}. ${f.id.slice(0, 8)} · ${f.filename.padEnd(28).slice(0, 28)} ${(f.size_bytes / 1024).toFixed(1).padStart(7)}KB · ${f.is_text ? "TEXT" : "BIN "} · ${f.mime}`,
+                    );
+                    pushSystem(`[FILE ${list.length} stored]\n${lines.join("\n")}`, ["FILE"]);
+                }
+            } else if (cmd === "/open") {
+                if (!rest) { pushSystem("[ERR] usage: /open <id-prefix>", ["ERR"]); return; }
+                const list = (await axios.get(`${API}/files`)).data || [];
+                const t = list.find((f) => f.id.startsWith(rest));
+                if (!t) { pushSystem(`[ERR] no file matches ${rest}.`, ["ERR"]); return; }
+                const meta = (await axios.get(`${API}/files/${t.id}?include_text=true`)).data;
+                if (meta.is_text && meta.text_preview) {
+                    pushSystem(
+                        `[FILE-OPEN ${meta.filename} ${meta.size_bytes}B]\n${meta.text_preview}`,
+                        ["FILE-OPEN"],
+                    );
+                } else {
+                    pushSystem(
+                        `[FILE-OPEN ${meta.filename}] binary — ${meta.size_bytes} bytes, ${meta.mime}. use /download ${t.id.slice(0,8)} to fetch.`,
+                        ["FILE-OPEN"],
+                    );
+                }
+            } else if (cmd === "/download") {
+                if (!rest) { pushSystem("[ERR] usage: /download <id-prefix>", ["ERR"]); return; }
+                const list = (await axios.get(`${API}/files`)).data || [];
+                const t = list.find((f) => f.id.startsWith(rest));
+                if (!t) { pushSystem(`[ERR] no file matches ${rest}.`, ["ERR"]); return; }
+                const a = document.createElement("a");
+                a.href = `${API}/files/${t.id}/download`;
+                a.download = t.filename;
+                a.click();
+                pushSystem(`[DOWNLOAD] ${t.filename} requested.`, ["DOWNLOAD"]);
+            } else if (cmd === "/browse") {
+                if (!rest) { pushSystem("[ERR] usage: /browse <url>", ["ERR"]); return; }
+                pushSystem(`[BROWSER] surfing ${rest}...`, ["BROWSER"]);
+                const res = await axios.post(`${API}/browser/fetch`, { url: rest });
+                const d = res.data;
+                pushSystem(
+                    `[SURF ${d.status} ${d.host || ""}]${d.title ? ` "${d.title}"` : ""}\n` +
+                    (d.text ? d.text.slice(0, 800) + (d.text.length > 800 ? "…" : "") : "(no text)") +
+                    `\n→ ${(d.links || []).length} links extracted. switch to BROWSER tab for full view.`,
+                    ["SURF"],
+                );
+                onSwitchTab?.("browser");
+            } else if (cmd === "/server") {
+                if (!rest) { pushSystem("[ERR] usage: /server <host> [protocol] [port]", ["ERR"]); return; }
+                const tokens = rest.split(/\s+/);
+                const body = { host: tokens[0] };
+                if (tokens[1]) body.protocol = tokens[1].toLowerCase();
+                if (tokens[2] && /^\d+$/.test(tokens[2])) body.port = parseInt(tokens[2], 10);
+                pushSystem(`[SERVER-PROBE] probing ${tokens[0]}...`, ["SERVER-PROBE"]);
+                const res = await axios.post(`${API}/server/diagnose`, body);
+                const d = res.data;
+                pushSystem(
+                    `[SERVER ${d.protocol?.toUpperCase()}://${d.host}:${d.port}] ${d.status}` +
+                    (d.latency_ms != null ? ` · ${d.latency_ms}ms` : "") +
+                    (d.details?.dns_ip ? ` · dns ${d.details.dns_ip}` : "") +
+                    (d.details?.http_info?.server ? ` · ${d.details.http_info.server}` : ""),
+                    ["SERVER"],
+                );
+            } else if (cmd === "/sat") {
+                const res = await axios.get(`${API}/satellite/feed`);
+                const m = res.data?.metrics || {};
+                pushSystem(
+                    `[SAT-MESH]\n` +
+                    `sats:       ${m.total}\n` +
+                    `locked:     ${m.locked} (LOS)\n` +
+                    `signal avg: ${(m.avg_signal * 100).toFixed(0)}%\n` +
+                    `integrity:  ${(m.mesh_integrity * 100).toFixed(1)}%\n` +
+                    `uplink:     ${(m.uplink_bps / 1_000_000).toFixed(2)} Mbps\n` +
+                    `downlink:   ${(m.downlink_bps / 1_000_000).toFixed(2)} Mbps`,
+                    ["SAT"],
+                );
+                onSwitchTab?.("satellite");
+            } else if (cmd === "/notif") {
+                onOpenNotifications?.();
+                pushSystem("[NOTIF] notification deck deployed.", ["NOTIF"]);
+            } else if (cmd === "/code") {
+                if (!rest) { pushSystem("[ERR] usage: /code <intent> [--lang=python]", ["ERR"]); return; }
+                let language = "python";
+                let intent = rest;
+                const m = rest.match(/--lang=(\S+)/);
+                if (m) { language = m[1]; intent = rest.replace(m[0], "").trim(); }
+                pushSystem(`[CODE-GEN ${language}] writing for: "${intent.slice(0, 80)}"...`, ["CODE"]);
+                const res = await axios.post(`${API}/code/generate`, { intent, language });
+                const c = res.data;
+                pushSystem(
+                    `[CODE id:${c.id.slice(0,8)} ${c.language} ${c.code.length}c]\n` +
+                    `${c.title}\n` +
+                    `${c.code.slice(0, 600)}${c.code.length > 600 ? "…" : ""}\n` +
+                    `(switch to CODE tab to copy/apply/download)`,
+                    ["CODE-GEN"],
+                );
+                onSwitchTab?.("code");
+            } else if (cmd === "/code-apply") {
+                if (!rest) { pushSystem("[ERR] usage: /code-apply <id-prefix>", ["ERR"]); return; }
+                const list = (await axios.get(`${API}/code`)).data || [];
+                const t = list.find((c) => c.id.startsWith(rest));
+                if (!t) { pushSystem(`[ERR] no snippet matches ${rest}.`, ["ERR"]); return; }
+                const r = await axios.post(`${API}/code/apply`, { id: t.id });
+                pushSystem(
+                    `[CODE-APPLY] persisted to ${r.data.path} (${r.data.bytes}B). execution gated to operator.`,
+                    ["CODE-APPLY"],
+                );
+            } else if (cmd === "/code-list") {
+                const list = (await axios.get(`${API}/code`)).data || [];
+                if (!list.length) {
+                    pushSystem("[CODE] no snippets yet. /code <intent>.", ["CODE"]);
+                } else {
+                    const lines = list.slice(0, 12).map((c, i) =>
+                        `${(i + 1).toString().padStart(2, "0")}. ${c.id.slice(0, 8)} · ${c.language.padEnd(10)} · ${c.applied ? "[APPLIED]" : "[draft]  "} · ${c.title.slice(0, 50)}`,
+                    );
+                    pushSystem(`[CODE ${list.length} snippets]\n${lines.join("\n")}`, ["CODE"]);
+                }
+            } else if (cmd === "/zoom") {
+                const v = (rest || "").toLowerCase();
+                if (v === "in") { window.__althea_zoom?.(-3); pushSystem("[ZOOM] in.", ["ZOOM"]); }
+                else if (v === "out") { window.__althea_zoom?.(3); pushSystem("[ZOOM] out.", ["ZOOM"]); }
+                else if (v === "reset" || v === "home" || !v) { window.__althea_zoomReset?.(); pushSystem("[ZOOM] reset.", ["ZOOM"]); }
+                else if (/^-?\d+(\.\d+)?$/.test(v)) { window.__althea_zoom?.(parseFloat(v)); pushSystem(`[ZOOM] Δ${v}.`, ["ZOOM"]); }
+                else pushSystem("[ERR] usage: /zoom in|out|reset|<delta>", ["ERR"]);
             } else if (grownSlugs.includes(cmd)) {
                 // Direct invocation of a grown faculty: /<slug> args
                 const slug = cmd.slice(1);
@@ -913,9 +1077,37 @@ const ChatConsole = ({
         setListening(true);
     };
 
+    const onFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) {
+            pushSystem(`[ERR] ${file.name} > 2MB. compress and retry.`, ["ERR"]);
+            return;
+        }
+        pushSystem(`[UPLOAD] ingesting ${file.name} (${file.size}B)...`, ["UPLOAD"]);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            const r = await axios.post(`${API}/files/upload`, fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            const d = r.data;
+            pushSystem(
+                `[FILE-INGEST id:${d.id.slice(0,8)} ${d.filename} ${d.size_bytes}B ${d.mime}]\n` +
+                (d.text_preview
+                    ? d.text_preview.slice(0, 600) + (d.text_preview.length > 600 ? "…" : "")
+                    : "(binary — checksum stored, /download to retrieve)"),
+                ["FILE-INGEST"],
+            );
+        } catch (err) {
+            pushSystem(`[ERR] upload failed: ${err.message}`, ["ERR"]);
+        }
+    };
+
     return (
         <section
-            className="panel cut h-full flex flex-col relative overflow-hidden grain"
+            className="panel cut h-full flex flex-col relative overflow-hidden grain scanlines cyberpunk-term"
             data-testid="chat-console"
         >
             <header className="flex items-center justify-between px-4 py-3 border-b border-white/10">
@@ -928,7 +1120,7 @@ const ChatConsole = ({
                         className="label text-[9px] text-[#666]"
                         data-testid="terminal-version"
                     >
-                        v2.1
+                        v3.0 cyberpunk
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1022,6 +1214,22 @@ const ChatConsole = ({
                         </div>
                     )}
                 </div>
+                <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="chat-attach-btn"
+                    title="attach a file (≤2MB)"
+                    className="heading text-[10px] uppercase tracking-widest px-2 py-1 border border-white/15 hover:border-[#FFD400]/60 hover:text-[#FFD400]"
+                >
+                    📎
+                </button>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={onFileChange}
+                    className="hidden"
+                    data-testid="chat-file-input"
+                />
                 <button
                     type="button"
                     onClick={toggleVoice}

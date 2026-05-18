@@ -4,14 +4,34 @@ import ObservationScreen from "@/components/ObservationScreen";
 import NetworkScreen from "@/components/NetworkScreen";
 import ConnectScreen from "@/components/ConnectScreen";
 import GrowthScreen from "@/components/GrowthScreen";
+import BrowserScreen from "@/components/BrowserScreen";
+import ServerScreen from "@/components/ServerScreen";
+import CodeScreen from "@/components/CodeScreen";
+import SatelliteScreen from "@/components/SatelliteScreen";
 
 const TAB_LABELS = {
     neural: "neural core // live lattice",
     observe: "observation // optical input",
+    browser: "browser // althea surfs the web",
     network: "network // interaction graph",
     connect: "connect // device + wi-fi bridge",
+    server: "server // diagnose · probe · gated-connect",
+    code: "self-write // althea authors code",
     growth: "autopoiesis // grown capabilities",
+    satellite: "satellite // L.E.O. mesh uplink",
 };
+
+const TABS = [
+    { id: "neural", label: "neural" },
+    { id: "observe", label: "observe" },
+    { id: "browser", label: "browser" },
+    { id: "network", label: "network" },
+    { id: "connect", label: "connect" },
+    { id: "server", label: "server" },
+    { id: "code", label: "code" },
+    { id: "growth", label: "growth" },
+    { id: "satellite", label: "satellite" },
+];
 
 const CenterDeck = ({
     tab,
@@ -31,19 +51,26 @@ const CenterDeck = ({
             className="panel cut h-full flex flex-col relative overflow-hidden grain"
             data-testid="center-deck"
         >
-            <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 z-10">
-                <div className="flex items-center gap-2">
+            <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 z-10 gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                     <div className="dot" />
-                    <h2 className="heading text-sm tracking-widest uppercase">
+                    <h2 className="heading text-sm tracking-widest uppercase truncate">
                         {TAB_LABELS[tab] || "core"}
                     </h2>
                 </div>
-                <div className="flex items-center gap-1 flex-wrap">
-                    <TabBtn active={tab === "neural"} onClick={() => setTab("neural")} testid="center-tab-neural" label="neural" />
-                    <TabBtn active={tab === "observe"} onClick={() => setTab("observe")} testid="center-tab-observe" label="observe" />
-                    <TabBtn active={tab === "network"} onClick={() => setTab("network")} testid="center-tab-network" label="network" />
-                    <TabBtn active={tab === "connect"} onClick={() => setTab("connect")} testid="center-tab-connect" label="connect" />
-                    <TabBtn active={tab === "growth"} onClick={() => setTab("growth")} testid="center-tab-growth" label="growth" />
+                <div
+                    className="flex items-center gap-1 flex-nowrap overflow-x-auto althea-scroll-h"
+                    data-testid="center-tabs"
+                >
+                    {TABS.map((t) => (
+                        <TabBtn
+                            key={t.id}
+                            active={tab === t.id}
+                            onClick={() => setTab(t.id)}
+                            testid={`center-tab-${t.id}`}
+                            label={t.label}
+                        />
+                    ))}
                 </div>
             </header>
 
@@ -68,6 +95,11 @@ const CenterDeck = ({
                         />
                     </div>
                 )}
+                {tab === "browser" && (
+                    <div className="absolute inset-0">
+                        <BrowserScreen onWatch={setObservationUrl} />
+                    </div>
+                )}
                 {tab === "network" && (
                     <div className="absolute inset-0">
                         <NetworkScreen
@@ -81,9 +113,24 @@ const CenterDeck = ({
                         <ConnectScreen />
                     </div>
                 )}
+                {tab === "server" && (
+                    <div className="absolute inset-0">
+                        <ServerScreen />
+                    </div>
+                )}
+                {tab === "code" && (
+                    <div className="absolute inset-0">
+                        <CodeScreen />
+                    </div>
+                )}
                 {tab === "growth" && (
                     <div className="absolute inset-0">
                         <GrowthScreen onExecuted={onGrowthExecuted} />
+                    </div>
+                )}
+                {tab === "satellite" && (
+                    <div className="absolute inset-0">
+                        <SatelliteScreen />
                     </div>
                 )}
             </div>
@@ -95,7 +142,7 @@ const TabBtn = ({ active, onClick, testid, label }) => (
     <button
         onClick={onClick}
         data-testid={testid}
-        className={`heading text-[10px] uppercase tracking-widest px-3 py-1 border ${
+        className={`heading text-[10px] uppercase tracking-widest px-3 py-1 border whitespace-nowrap shrink-0 ${
             active
                 ? "border-[#CCFF00]/60 text-[#CCFF00] bg-[#CCFF00]/10"
                 : "border-white/10 text-[#888] hover:text-white"
