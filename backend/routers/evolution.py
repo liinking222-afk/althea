@@ -32,7 +32,10 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 router = APIRouter()
 
 GROWN_CODE_DIR = Path("/app/althea_grown_code")
-GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    logging.warning("could not create %s — evolution writes will be skipped", GROWN_CODE_DIR)
 
 AUTO_EVOLUTION_COOLDOWN_SECONDS = 75
 

@@ -24,7 +24,11 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 router = APIRouter()
 
 GROWN_CODE_DIR = Path("/app/althea_grown_code")
-GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    # On hardened/read-only filesystems, soft-apply will be skipped.
+    logging.warning("could not create %s — code apply will fall back to in-memory only", GROWN_CODE_DIR)
 
 EXT_BY_LANG = {
     "python": ".py", "javascript": ".js", "typescript": ".ts",
@@ -153,7 +157,13 @@ async def apply_code(req: CodeApplyRequest):
     safe_title = re.sub(r"[^A-Za-z0-9._-]", "_", doc.get("title", "snippet"))[:60]
     fname = f"{doc['id'][:8]}__{safe_title}{ext}"
     path = GROWN_CODE_DIR / fname
-    path.write_text(doc.get("code", ""), encoding="utf-8")
+    bytes_written = 0
+    try:
+        GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(doc.get("code", ""), encoding="utf-8")
+        bytes_written = path.stat().st_size
+    except Exception:
+        logging.warning("apply_code write failed for %s — marking applied without on-disk persistence", path)
 
     await db.althea_code.update_one(
         {"id": req.id},
@@ -174,7 +184,7 @@ async def apply_code(req: CodeApplyRequest):
         "path": str(path),
         "filename": fname,
         "language": lang,
-        "bytes": path.stat().st_size,
+        "bytes": bytes_written,
     }
 
 
