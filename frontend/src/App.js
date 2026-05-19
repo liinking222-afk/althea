@@ -53,8 +53,8 @@ function App() {
             try {
                 const res = await axios.get(`${API}/growth/stats`);
                 if (!cancelled) setGrowth(res.data);
-            } catch (_) {
-                /* ignore */
+            } catch (e) {
+                console.warn("growth stats fetch failed:", e);
             }
         };
         fetchGrowth();
@@ -82,8 +82,8 @@ function App() {
                     });
                     notifications.refresh();
                 }
-            } catch (_) {
-                /* ignore */
+            } catch (e) {
+                console.warn("autonomous growth spawn failed:", e);
             }
         };
         const t = setInterval(autoSpawn, 60000);
@@ -119,7 +119,9 @@ function App() {
                 if (!cancelled && res.data?.evolved) {
                     notifications.refresh();
                 }
-            } catch (_) {/* ignore */}
+            } catch (e) {
+                console.warn("autonomous evolution tick failed:", e);
+            }
         };
         const t = setInterval(autoEvolve, 80000);
         const first = setTimeout(autoEvolve, 35000); // first cycle ~35s after boot

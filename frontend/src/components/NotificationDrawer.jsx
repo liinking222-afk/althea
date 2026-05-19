@@ -178,8 +178,8 @@ export const useNotifications = () => {
             ]);
             setItems(list.data || []);
             setUnseen(count.data?.unseen || 0);
-        } catch (_) {
-            /* ignore */
+        } catch (e) {
+            console.warn("notifications refresh failed:", e);
         }
     }, []);
 
@@ -193,21 +193,27 @@ export const useNotifications = () => {
         try {
             await axios.post(`${API}/notifications/seen-all`);
             refresh();
-        } catch (_) {/* ignore */}
+        } catch (e) {
+            console.warn("mark-all-seen failed:", e);
+        }
     }, [refresh]);
 
     const clearAll = useCallback(async () => {
         try {
             await axios.delete(`${API}/notifications`);
             refresh();
-        } catch (_) {/* ignore */}
+        } catch (e) {
+            console.warn("clear-all failed:", e);
+        }
     }, [refresh]);
 
     const deleteOne = useCallback(async (id) => {
         try {
             await axios.delete(`${API}/notifications/${id}`);
             refresh();
-        } catch (_) {/* ignore */}
+        } catch (e) {
+            console.warn("delete notification failed:", e);
+        }
     }, [refresh]);
 
     return { items, unseen, refresh, markAllSeen, clearAll, deleteOne };

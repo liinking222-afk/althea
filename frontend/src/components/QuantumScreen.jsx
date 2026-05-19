@@ -184,7 +184,7 @@ const QuantumScreen = () => {
                             <div>
                                 <div className="label text-[8px] text-[#666] uppercase mb-1">superposition</div>
                                 {lastResult.superposition.map((s, i) => (
-                                    <div key={i} className="border-l-2 border-[#00F0FF]/30 pl-2 mb-1 text-white/70 whitespace-pre-wrap">
+                                    <div key={`sup-${i}`} className="border-l-2 border-[#00F0FF]/30 pl-2 mb-1 text-white/70 whitespace-pre-wrap">
                                         {s}
                                     </div>
                                 ))}
@@ -249,7 +249,7 @@ const BrainSvg = ({ graph, positionFor, tick, now, nodeCount }) => (
             const b = positionFor(e.to);
             const opacity = Math.min(0.15 + (e.weight || 1) * 0.04, 0.7);
             return (
-                <line key={`e${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                <line key={`${e.from}|${e.to}|${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
                     stroke="#00F0FF"
                     strokeWidth={0.5 + Math.min((e.weight || 1) * 0.3, 2)}
                     opacity={opacity}
@@ -363,8 +363,8 @@ const SynapseHeat = ({ edges, onExpand, large }) => {
                 {top.length === 0 && (
                     <div className="text-[#555] text-[10px]">no synapses formed.</div>
                 )}
-                {top.map((e, i) => (
-                    <div key={i} className="text-[9px] flex items-center gap-2">
+                {top.map((e) => (
+                    <div key={`${e.from}|${e.to}`} className="text-[9px] flex items-center gap-2">
                         <span
                             className="w-1.5 h-1.5 rounded-full"
                             style={{

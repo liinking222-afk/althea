@@ -21,7 +21,9 @@ const CodeScreen = () => {
                 const fresh = (r.data || []).find((c) => c.id === selected.id);
                 if (fresh) setSelected(fresh);
             }
-        } catch (_) {/* ignore */}
+        } catch (e) {
+            console.warn("code refresh failed:", e);
+        }
     }, [selected]);
 
     useEffect(() => {
@@ -53,7 +55,9 @@ const CodeScreen = () => {
             const r = await axios.post(`${API}/code/apply`, { id });
             await refresh();
             return r.data;
-        } catch (_) {/* ignore */}
+        } catch (e) {
+            console.warn("code apply failed:", e);
+        }
     };
 
     const removeOne = async (id) => {
@@ -68,7 +72,9 @@ const CodeScreen = () => {
             await navigator.clipboard.writeText(selected.code);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
-        } catch (_) {/* ignore */}
+        } catch (e) {
+            console.warn("clipboard copy failed:", e);
+        }
     };
 
     const download = () => {

@@ -156,7 +156,7 @@ const BrowserScreen = ({ onWatch }) => {
                     )}
                     {(page?.links || []).map((l, i) => (
                         <button
-                            key={i}
+                            key={`${l.url}|${i}`}
                             onClick={() => openLink(l.url)}
                             className="block text-left w-full text-[10px] text-white/70 hover:text-[#00F0FF] hover:bg-[#00F0FF]/5 border border-transparent hover:border-[#00F0FF]/20 px-2 py-1 truncate"
                             data-testid={`browser-link-${i}`}
