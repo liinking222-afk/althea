@@ -1,0 +1,1 @@
+# [CORE-LATENCY] could not reach cognition core for: create code to fix terminal and stop all self diagnostics
