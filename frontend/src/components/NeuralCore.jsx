@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import axios from "axios";
 import { API } from "@/App";
+import { quantumOS } from "@/lib/quantumMindOS";
 
 const LAYERS = [6, 10, 10, 4];
 const ACCENT = 0xccff00;
@@ -46,6 +47,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
     const canvasRef = useRef(null);
     const onClickRef = useRef(onLatticeNodeClick);
     const [latticeCount, setLatticeCount] = React.useState(0);
+    const [quantumCount, setQuantumCount] = React.useState(0);
     const zoomRef = useRef({ z: 14, min: 4, max: 28, target: 14 });
     const [zoomUi, setZoomUi] = React.useState(14);
 
@@ -280,6 +282,128 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         refreshLattice();
         const latticePoll = setInterval(refreshLattice, 5000);
 
+        // ---- QUANTUM MIND OS BRAIN — yellow outer-shell group ----
+        // Same Three.js scene as the cognitive lattice. Quantum nodes orbit
+        // an OUTER shell (radius ~11) so they're spatially distinct from the
+        // inner cognitive lattice (radius ~7.5) and the magenta EVO halos.
+        // Recently-fired quantum nodes glow brighter and pulse pink.
+        const quantumGroup = new THREE.Group();
+        scene.add(quantumGroup);
+        const quantumMeshes = [];
+        const QYELLOW = 0xffd400;
+        const QFIRE = 0xff2a88;
+
+        function disposeQuantum() {
+            while (quantumGroup.children.length) {
+                const c = quantumGroup.children.pop();
+                quantumGroup.remove(c);
+                c.geometry?.dispose?.();
+                if (Array.isArray(c.material))
+                    c.material.forEach((m) => m.dispose?.());
+                else c.material?.dispose?.();
+            }
+            quantumMeshes.length = 0;
+        }
+
+        // Deterministic position for a quantum node — hash id → outer shell.
+        function quantumPosition(id) {
+            if (id === "core_node") return new THREE.Vector3(0, 0, 0);
+            let h = 0;
+            for (let i = 0; i < id.length; i++)
+                h = (h * 31 + id.charCodeAt(i)) | 0;
+            const golden = Math.PI * (3 - Math.sqrt(5));
+            const i = Math.abs(h) % 256;
+            const r = 11 + (i % 5) * 0.3;
+            const theta = i * golden;
+            const phi = Math.acos(1 - (2 * ((i * 0.213) % 1)));
+            return new THREE.Vector3(
+                r * Math.sin(phi) * Math.cos(theta),
+                r * Math.sin(phi) * Math.sin(theta) * 0.7,
+                r * Math.cos(phi),
+            );
+        }
+
+        function rebuildQuantum(graph) {
+            disposeQuantum();
+            if (!graph || !graph.nodes) return;
+            setQuantumCount(graph.nodes.length);
+
+            const positions = new Map();
+            graph.nodes.forEach((n) => positions.set(n.id, quantumPosition(n.id)));
+
+            // edges — thin yellow lines
+            const edgeMat = new THREE.LineBasicMaterial({
+                color: QYELLOW,
+                transparent: true,
+                opacity: 0.28,
+            });
+            graph.edges.forEach((e) => {
+                const a = positions.get(e.from);
+                const b = positions.get(e.to);
+                if (!a || !b) return;
+                const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+                quantumGroup.add(new THREE.Line(geom, edgeMat));
+            });
+
+            const sphereGeom = new THREE.SphereGeometry(0.16, 12, 12);
+            const coreGeom = new THREE.SphereGeometry(0.28, 16, 16);
+            const now = Date.now();
+            graph.nodes.forEach((n, idx) => {
+                const isCore = n.id === "core_node";
+                const age = now - (n.activity || 0);
+                const firing = age < 2500;
+                const baseColor = isCore
+                    ? ACCENT
+                    : firing
+                        ? QFIRE
+                        : QYELLOW;
+                const mat = new THREE.MeshStandardMaterial({
+                    color: baseColor,
+                    emissive: baseColor,
+                    emissiveIntensity: firing ? 2.4 : isCore ? 2.0 : 1.5,
+                    toneMapped: false,
+                });
+                const mesh = new THREE.Mesh(
+                    isCore ? coreGeom : sphereGeom,
+                    mat,
+                );
+                mesh.position.copy(positions.get(n.id));
+                mesh.userData = {
+                    seed: idx * 0.29 + 0.07,
+                    activity: n.activity || 0,
+                    strength: n.strength || 1,
+                    isQuantum: true,
+                    isFiring: firing,
+                };
+                quantumGroup.add(mesh);
+                quantumMeshes.push(mesh);
+
+                if (firing) {
+                    const haloGeom = new THREE.RingGeometry(0.35, 0.55, 24);
+                    const haloMat = new THREE.MeshBasicMaterial({
+                        color: QFIRE,
+                        transparent: true,
+                        opacity: 0.6,
+                        side: THREE.DoubleSide,
+                    });
+                    const halo = new THREE.Mesh(haloGeom, haloMat);
+                    halo.position.copy(positions.get(n.id));
+                    halo.userData = { isQuantumHalo: true, seed: idx * 0.31 };
+                    quantumGroup.add(halo);
+                    quantumMeshes.push(halo);
+                }
+            });
+        }
+
+        // Seed once + subscribe to live updates
+        rebuildQuantum(quantumOS.snapshot());
+        const unsubQuantum = quantumOS.subscribe(rebuildQuantum);
+        // Re-render every 2.5s so 'firing' decays visually
+        const quantumTick = setInterval(
+            () => rebuildQuantum(quantumOS.snapshot()),
+            2500,
+        );
+
         // Animate
         const clock = new THREE.Clock();
         let raf = 0;
@@ -412,6 +536,23 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     (isEvo ? 1.4 : 1.0) + 0.9 * Math.sin(t * 2.4 + seed * 11);
             });
 
+            // animate QUANTUM brain — yellow outer-shell with pink fire on recent firings
+            quantumMeshes.forEach((m) => {
+                if (m.userData?.isQuantumHalo) {
+                    m.rotation.z = t * 0.9 + (m.userData.seed || 0) * 5;
+                    m.material.opacity = 0.4 + 0.3 * Math.sin(t * 3 + (m.userData.seed || 0) * 7);
+                    return;
+                }
+                const { seed, strength, isFiring } = m.userData;
+                const base = isFiring ? 1.5 : 1.0;
+                const amp = isFiring ? 0.7 : 0.35;
+                const s = base + amp * Math.sin(t * (isFiring ? 3.2 : 1.8) + seed * 10);
+                const scale = s * (0.7 + Math.min(strength * 0.25, 0.6));
+                m.scale.set(scale, scale, scale);
+                m.material.emissiveIntensity =
+                    (isFiring ? 1.8 : 1.2) + 0.7 * Math.sin(t * 2.8 + seed * 12);
+            });
+
             renderer.render(scene, camera);
         };
         animate();
@@ -435,6 +576,8 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             renderer.domElement.removeEventListener("mousedown", onCanvasMouseDown);
             renderer.domElement.removeEventListener("click", onCanvasClick);
             renderer.domElement.removeEventListener("wheel", onWheel);
+            unsubQuantum?.();
+            clearInterval(quantumTick);
             delete window.__althea_zoom;
             delete window.__althea_zoomReset;
             renderer.dispose();
@@ -527,6 +670,21 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                             value={`+${latticeCount}`}
                             cyan
                         />
+                        <ReadoutBlock
+                            label="quantum"
+                            value={`+${quantumCount}`}
+                            yellow
+                        />
+                    </div>
+
+                    {/* 3-layer legend — cognitive · evolution · quantum */}
+                    <div
+                        className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 px-3 py-1.5 border border-white/10 bg-black/40 backdrop-blur-sm"
+                        data-testid="neural-layer-legend"
+                    >
+                        <LegendDot color="#00E5FF" label="cognitive" />
+                        <LegendDot color="#FF2A88" label="evolution" />
+                        <LegendDot color="#FFD400" label="quantum" />
                     </div>
 
                     {/* Zoom controls */}
@@ -607,14 +765,36 @@ const CornerTick = ({ className = "", flipX, flipY }) => (
     </div>
 );
 
-const ReadoutBlock = ({ label, value, cyan }) => (
+const ReadoutBlock = ({ label, value, cyan, yellow }) => (
     <div>
         <div className="label text-[9px]">{label}</div>
         <div
-            className={`heading text-base ${cyan ? "text-[#00F0FF] glow-cyan" : "text-[#CCFF00] glow"} leading-none mt-0.5`}
+            className={`heading text-base ${
+                yellow
+                    ? "text-[#FFD400]"
+                    : cyan
+                        ? "text-[#00F0FF] glow-cyan"
+                        : "text-[#CCFF00] glow"
+            } leading-none mt-0.5`}
+            style={yellow ? { textShadow: "0 0 8px #FFD400" } : undefined}
         >
             {value}
         </div>
+    </div>
+);
+
+const LegendDot = ({ color, label }) => (
+    <div className="flex items-center gap-1.5">
+        <span
+            className="w-2 h-2 rounded-full inline-block"
+            style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+        />
+        <span
+            className="label text-[9px] uppercase tracking-widest"
+            style={{ color }}
+        >
+            {label}
+        </span>
     </div>
 );
 
