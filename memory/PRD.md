@@ -55,7 +55,13 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-19 — Iteration 17 (THIS SESSION)
+### 2026-05-19 — Iteration 19 (THIS SESSION)
+- **P1: Wi-Fi profile export** — new `POST /api/network/profile/{id}/export?fmt=mobileconfig|wpa_supplicant` endpoint. Generates proper Apple Configuration Profile XML (WPA/WPA2/WPA3/WEP/OPEN) and Linux/Android wpa_supplicant.conf snippets (WPA-PSK, SAE for WPA3, OPEN/WEP). Operator supplies password at export time (NOT persisted server-side); placeholder embedded if absent. Frontend ConnectScreen now shows Apple + WPA buttons next to each profile, with a prompt for the password just before download.
+- **P1: Bluetooth/USB pairings → /api/lattice/learn** — every successful Web Bluetooth, Web USB, or Web Serial pairing now also POSTs to `/api/lattice/learn` with a tagged stream string. Each pairing triggers autonomous pattern extraction + spawns a cognitive node, so the lattice grows organically as the operator pairs hardware.
+- **P2: ChatConsole refactor** — extracted STATIC_SLASH, ASCII_BANNER, TAG_COLOR, HELP_TEXT, getMessageTag into `/app/frontend/src/lib/terminalConstants.js`; extracted MessageRow component into `/app/frontend/src/components/MessageRow.jsx`. ChatConsole.jsx dropped from 1430 → 1221 lines (-15%).
+- **Backend test** `/app/backend/tests/test_iter19.py` — 8/8 passing.
+
+### 2026-05-19 — Iteration 18
 - **Quantum Mind OS Integration** — operator dropped a complete JS module (QuantumState + MemoryLattice + 3 simulated agents + QuantumMindOS kernel + runQuantumOS entry point). Integrated verbatim with non-breaking adapters (ES exports, pub/sub for React subscribers, reset/snapshot).
 - New **QUANTUM tab** (`QuantumScreen.jsx`) renders the live in-browser neural brain as an SVG graph: deterministic hash-based radial layout, `core_node` glowing yellow at center, recently-fired nodes pulse magenta with a radial fire gradient, edges weight-proportional. Right sidebar shows last collapse (superposition layers + collapsed result + recalled memory).
 - New slash commands `/quantum <input>`, `/qstatus`, `/qwipe`. Help text updated.

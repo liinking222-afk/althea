@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { Wifi, Bluetooth, Usb, Plug, Radio, Trash2, ShieldAlert } from "lucide-react";
+import { Wifi, Bluetooth, Usb, Plug, Radio, Trash2, ShieldAlert, Apple, Terminal } from "lucide-react";
 import { API } from "@/App";
 
 const SECURITY_OPTIONS = ["WPA2", "WPA3", "WPA", "WEP", "OPEN"];
@@ -87,6 +87,36 @@ const ConnectScreen = () => {
         }
     };
 
+    const exportProfile = async (p, fmt) => {
+        let password = null;
+        if (p.has_password) {
+            password = window.prompt(
+                `Wi-Fi password for "${p.ssid}" — used ONLY to bake into the export. ALTHEA does not persist it.\n(Leave blank to embed a placeholder.)`,
+                "",
+            );
+            if (password === null) return; // operator cancelled
+        }
+        try {
+            const res = await axios.post(
+                `${API}/network/profile/${p.id}/export?fmt=${fmt}`,
+                { password: password || null },
+                { responseType: "blob" },
+            );
+            const blob = new Blob([res.data], {
+                type: res.headers["content-type"] || "application/octet-stream",
+            });
+            const ext = fmt === "mobileconfig" ? "mobileconfig" : "conf";
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `althea-${p.ssid.replace(/[^A-Za-z0-9._-]+/g, "_")}.${ext}`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        } catch (error) {
+            console.error("export failed:", error);
+            alert("Export failed: " + error.message);
+        }
+    };
+
     const pairDevice = async (kind) => {
         setScanning(kind);
         try {
@@ -121,6 +151,14 @@ const ConnectScreen = () => {
                 .post(`${API}/lattice/perception`, {
                     modality: kind.toUpperCase(),
                     endpoint,
+                })
+                .catch(() => {});
+
+            // PLUG into autonomous pattern extraction — Althea learns from each pairing.
+            await axios
+                .post(`${API}/lattice/learn`, {
+                    stream: `[${kind.toUpperCase()}-PAIRED ${label}] endpoint=${endpoint} at=${new Date().toISOString()}`,
+                    label: `pairing:${kind}`,
                 })
                 .catch(() => {});
             setPaired((p) => [
@@ -341,14 +379,34 @@ const ConnectScreen = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => removeProfile(p.id)}
-                                    className="text-[#888] hover:text-[#FF2A2A] p-1"
-                                    aria-label="delete profile"
-                                    data-testid={`wifi-profile-delete-${p.id}`}
-                                >
-                                    <Trash2 size={12} />
-                                </button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                        onClick={() => exportProfile(p, "mobileconfig")}
+                                        title="export Apple .mobileconfig (iOS/macOS)"
+                                        data-testid={`wifi-export-mobileconfig-${p.id}`}
+                                        className="heading text-[9px] uppercase tracking-widest px-2 py-1 border border-white/10 hover:border-[#00F0FF]/60 hover:text-[#00F0FF] flex items-center gap-1"
+                                    >
+                                        <Apple size={10} />
+                                        mobileconfig
+                                    </button>
+                                    <button
+                                        onClick={() => exportProfile(p, "wpa_supplicant")}
+                                        title="export wpa_supplicant.conf (Linux/Android)"
+                                        data-testid={`wifi-export-wpa-${p.id}`}
+                                        className="heading text-[9px] uppercase tracking-widest px-2 py-1 border border-white/10 hover:border-[#CCFF00]/60 hover:text-[#CCFF00] flex items-center gap-1"
+                                    >
+                                        <Terminal size={10} />
+                                        wpa
+                                    </button>
+                                    <button
+                                        onClick={() => removeProfile(p.id)}
+                                        className="text-[#888] hover:text-[#FF2A2A] p-1"
+                                        aria-label="delete profile"
+                                        data-testid={`wifi-profile-delete-${p.id}`}
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
                             </li>
                         ))}
                     </ul>
