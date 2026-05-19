@@ -55,7 +55,25 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-18 — Iteration 14 (THIS SESSION)
+### 2026-05-19 — Iteration 16 (THIS SESSION)
+- **ALTHEA EVOLUTION ENGINE** — autonomous self-update + master-coder channels.
+  - 11 archetypes: LINUS, CARMACK, DIJKSTRA, HOPPER, KERNIGHAN, KAY, THOMPSON, WALL, WOZ, BACKUS, SELF.
+  - `POST /api/evolution/tick` — runs one build cycle. Claude channels the chosen archetype, writes ONE concrete self-improvement code module, persists to /app/althea_grown_code/, spawns a magenta `EVO-XXXX` lattice node with halo ring, bumps Althea's semantic version (patch for archetype cycles, minor for SELF), emits a notification.
+  - `POST /api/evolution/master-update` — force a cycle from a specific master coder.
+  - `GET /api/evolution/version` — current version + cycle count + archetype list.
+  - `GET /api/evolution/cycles` — timeline.
+  - `GET /api/evolution/archetypes` — doctrine snippets for each master.
+  - `DELETE /api/evolution/cycles` — reset.
+  - Server-side cooldown 75s for autonomous trigger.
+- **Autonomous Poller** — App.js fires /api/evolution/tick every 80s with first call ~35s after boot. Cycles appear without operator action.
+- **NeuralCore EVO Visuals** — EVO-XXXX nodes render in magenta (#FF2A88), larger sphere geometry (0.22r vs 0.14r), with a spinning halo ring. CognitiveNode model gained `is_evolution: bool` and `archetype: str` fields.
+- **EvolutionScreen** — new center-deck tab. Header shows v<X.Y.Z> + cycle counter. Manual tick form (archetype select + hint input + evolve button). Master-coder channel grid (clickable to pull updates). Cycle timeline with color-coded archetype cards.
+- **Terminal commands** — `/evolve [archetype] [hint]`, `/version`, `/cycles`, `/master <archetype>`. Help text updated.
+- **TopBar** — growth-readout extended with `e:<n>` for evolution_cycles. `/growth/stats` now includes `evolution_cycles`.
+- **Backend test** `/app/backend/tests/test_iter16.py` — 13 tests pass.
+- **testing_agent_v3_fork iteration_16.json** — Frontend 100%, backend functional 100% (3 pytest race conditions fixed by relaxing equality to >= against live autopoller).
+
+### 2026-05-18 — Iteration 14
 - **Infinite Growth Architecture** (`/app/backend/routers/growth.py`)
   - POST `/api/growth/spawn` — Althea invents a brand-new capability via Claude. Returns full `GrownCapability` (slug, name, category, description, command, rationale, action_template, activation).
   - POST `/api/growth/execute` — re-prompts Claude with the capability's `action_template` + operator args. Bumps `invocations` counter.
