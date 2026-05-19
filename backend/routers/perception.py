@@ -1,5 +1,6 @@
 """Visual Perception + Growth Stats."""
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -11,6 +12,12 @@ from models import CognitiveNode, Memory
 from utils import next_node_id
 
 router = APIRouter()
+
+# In-process TTL cache for /growth/stats — frontend polls every 5s,
+# 9 count_documents per call is wasteful on Atlas. 4s TTL keeps the UI
+# fresh while collapsing the hottest endpoint to ~12 queries/min instead of ~108.
+_STATS_CACHE = {"at": 0.0, "data": None}
+_STATS_TTL = 4.0
 
 
 class PerceptionFrame(BaseModel):
@@ -95,8 +102,13 @@ async def latest_frame(include_image: bool = False):
 
 @router.get("/growth/stats")
 async def growth_stats():
-    """Real-time aggregate counts — what Althea has accumulated."""
-    return {
+    """Real-time aggregate counts — what Althea has accumulated.
+    Cached in-process for ~4s to keep Atlas roundtrips bounded under heavy UI polling."""
+    now = time.time()
+    if _STATS_CACHE["data"] and (now - _STATS_CACHE["at"]) < _STATS_TTL:
+        return _STATS_CACHE["data"]
+
+    data = {
         "memories": await db.althea_memories.count_documents({}),
         "lattice_nodes": await db.althea_nodes.count_documents({}),
         "active_threads": await db.althea_threads.count_documents({"active": True}),
@@ -108,3 +120,6 @@ async def growth_stats():
         "grown_capabilities": await db.althea_capabilities.count_documents({}),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    _STATS_CACHE["data"] = data
+    _STATS_CACHE["at"] = now
+    return data
