@@ -16,6 +16,7 @@ from routers import (  # noqa: E402
     codegen,
     cognition,
     desktop,
+    evolution,
     files,
     growth,
     lattice,
@@ -49,6 +50,7 @@ api_router.include_router(server_ops.router)
 api_router.include_router(satellite.router)
 api_router.include_router(codegen.router)
 api_router.include_router(desktop.router)
+api_router.include_router(evolution.router)
 
 app.include_router(api_router)
 

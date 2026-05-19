@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="13" time="105.538" timestamp="2026-05-19T07:06:06.895502+00:00" hostname="agent-env-68a82758-f7b1-42c3-b645-2e2723cb635e"><testcase classname="tests.test_iter16" name="test_version_starts_at_1_0_0" time="48.583"><failure message="AssertionError: assert '1.0.1' == '1.0.0'&#10;  &#10;  - 1.0.0&#10;  ?     ^&#10;  + 1.0.1&#10;  ?     ^">tests/test_iter16.py:31: in test_version_starts_at_1_0_0
+    assert d["version"] == "1.0.0"
+E   AssertionError: assert '1.0.1' == '1.0.0'
+E     
+E     - 1.0.0
+E     ?     ^
+E     + 1.0.1
+E     ?     ^</failure></testcase><testcase classname="tests.test_iter16" name="test_archetypes_endpoint" time="0.112" /><testcase classname="tests.test_iter16" name="test_manual_tick_force" time="17.512"><failure message="assert 4 == 1">tests/test_iter16.py:55: in test_manual_tick_force
+    assert c["cycle_number"] == 1
+E   assert 4 == 1</failure></testcase><testcase classname="tests.test_iter16" name="test_version_bumps_after_tick" time="0.049"><failure message="AssertionError: assert '1.0.2' == '1.0.1'&#10;  &#10;  - 1.0.1&#10;  ?     ^&#10;  + 1.0.2&#10;  ?     ^">tests/test_iter16.py:65: in test_version_bumps_after_tick
+    assert r.json()["version"] == "1.0.1"
+E   AssertionError: assert '1.0.2' == '1.0.1'
+E     
+E     - 1.0.1
+E     ?     ^
+E     + 1.0.2
+E     ?     ^</failure></testcase><testcase classname="tests.test_iter16" name="test_self_archetype_bumps_minor" time="13.371" /><testcase classname="tests.test_iter16" name="test_autonomous_cooldown" time="12.232" /><testcase classname="tests.test_iter16" name="test_master_update_endpoint" time="13.209" /><testcase classname="tests.test_iter16" name="test_unknown_archetype_master" time="0.045" /><testcase classname="tests.test_iter16" name="test_cycles_list" time="0.043" /><testcase classname="tests.test_iter16" name="test_evo_node_appears_in_lattice" time="0.050" /><testcase classname="tests.test_iter16" name="test_evolution_emits_notification" time="0.048" /><testcase classname="tests.test_iter16" name="test_growth_stats_includes_evolution_cycles" time="0.044" /><testcase classname="tests.test_iter16" name="test_reset_cycles" time="0.138" /></testsuite></testsuites>

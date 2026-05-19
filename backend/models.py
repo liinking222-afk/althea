@@ -144,6 +144,8 @@ class CognitiveNode(BaseModel):
     parent_id: Optional[str] = None
     memory_trace: Optional[str] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_evolution: Optional[bool] = False
+    archetype: Optional[str] = None
 
 
 class NodeCreate(BaseModel):
@@ -313,5 +315,31 @@ class CodeGenerateRequest(BaseModel):
 
 class CodeApplyRequest(BaseModel):
     id: str
+
+
+# ---------- Evolution Engine (autonomous self-update) ----------
+class EvolutionCycle(BaseModel):
+    """One autonomous build/update cycle. Althea builds herself while idle."""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    cycle_number: int  # monotonic 1..N
+    archetype: str  # LINUS | CARMACK | DIJKSTRA | HOPPER | KERNIGHAN | KAY | THOMPSON | WALL | WOZ | BACKUS | SELF
+    intent: str  # what althea decided to build this cycle
+    code_id: Optional[str] = None  # link to CodeSnippet
+    node_id: Optional[str] = None  # link to CognitiveNode (EVO-XXXX)
+    delta: str  # short prose describing the change
+    version_before: str
+    version_after: str
+    trigger: str = "autonomous"  # autonomous | manual | master
+    applied: bool = False
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EvolutionTickRequest(BaseModel):
+    archetype: Optional[str] = None
+    force: Optional[bool] = False
+    trigger: Optional[str] = "autonomous"
+    intent_hint: Optional[str] = None
+
 
 

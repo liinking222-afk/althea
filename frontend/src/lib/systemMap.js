@@ -195,4 +195,10 @@ export const SYSTEM_CAPABILITIES = [
         description:
             "DOWNLOAD button in top bar — fetches a self-contained tar.gz of ALTHEA's desktop companion: a minimal FastAPI shell + holographic HTML chat that runs on any desktop with Python 3.10+. Includes launcher script `althea.sh`. Supports EMERGENT_LLM_KEY or ANTHROPIC_API_KEY for live cognition; otherwise runs in cached/offline mode.",
     },
+    {
+        name: "EvolutionEngine",
+        testid: "center-tab-evolution",
+        description:
+            "AUTONOMOUS SELF-UPDATE — ALTHEA builds herself while idle. Every ~80 seconds (server cooldown 75s) she runs a BUILD CYCLE: picks a legendary-coder archetype (LINUS / CARMACK / DIJKSTRA / HOPPER / KERNIGHAN / KAY / THOMPSON / WALL / WOZ / BACKUS / SELF) and channels their doctrine to write ONE new self-improvement module. Each cycle bumps her semantic version (patch for archetypes, minor for SELF), persists code to /app/althea_grown_code/, spawns a magenta EVO-XXXX node visible in the 3D neural lattice, and emits a notification. Slash commands: /evolve [archetype] [hint], /version, /cycles, /master <archetype>. The EVOLUTION tab in the center deck has a cycle timeline + a master-coder channel grid where operator can click an archetype to pull an update from that doctrine.",
+    },
 ];

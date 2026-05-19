@@ -219,24 +219,46 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
 
                 // node spheres — visible sphere + larger transparent pick mesh
                 const visibleGeom = new THREE.SphereGeometry(0.14, 12, 12);
+                const evoGeom = new THREE.SphereGeometry(0.22, 16, 16);
                 const pickGeom = new THREE.SphereGeometry(0.5, 8, 8);
+                const EVO = 0xff2a88;
                 nodes.forEach((n, idx) => {
+                    const isEvo = !!n.is_evolution;
+                    const nodeColor = isEvo ? EVO : CYAN;
                     const mat = new THREE.MeshStandardMaterial({
-                        color: CYAN,
-                        emissive: CYAN,
-                        emissiveIntensity: 1.4,
+                        color: nodeColor,
+                        emissive: nodeColor,
+                        emissiveIntensity: isEvo ? 2.0 : 1.4,
                         toneMapped: false,
                     });
-                    const mesh = new THREE.Mesh(visibleGeom, mat);
+                    const mesh = new THREE.Mesh(isEvo ? evoGeom : visibleGeom, mat);
                     mesh.position.copy(positions.get(n.id));
                     mesh.userData = {
                         seed: idx * 0.41 + 0.13,
                         activation: n.activation ?? 1.0,
                         nodeId: n.id,
                         trace: n.memory_trace || "",
+                        isEvo,
+                        archetype: n.archetype || null,
                     };
                     latticeGroup.add(mesh);
                     latticeMeshes.push(mesh);
+
+                    // EVO halo ring
+                    if (isEvo) {
+                        const ringGeom = new THREE.RingGeometry(0.35, 0.5, 24);
+                        const ringMat = new THREE.MeshBasicMaterial({
+                            color: EVO,
+                            transparent: true,
+                            opacity: 0.5,
+                            side: THREE.DoubleSide,
+                        });
+                        const ring = new THREE.Mesh(ringGeom, ringMat);
+                        ring.position.copy(positions.get(n.id));
+                        ring.userData = { ringFor: n.id, seed: idx * 0.37 };
+                        latticeGroup.add(ring);
+                        latticeMeshes.push(ring);
+                    }
 
                     // invisible larger sphere so the raycaster picks reliably
                     const pickMat = new THREE.MeshBasicMaterial({
@@ -246,7 +268,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     });
                     const pick = new THREE.Mesh(pickGeom, pickMat);
                     pick.position.copy(positions.get(n.id));
-                    pick.userData = mesh.userData; // share so raycaster returns same data
+                    pick.userData = mesh.userData;
                     latticeGroup.add(pick);
                     latticeMeshes.push(pick);
                 });
@@ -374,12 +396,20 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
 
             // animate lattice satellites (faster, larger pulse)
             latticeMeshes.forEach((m) => {
-                const { seed, activation } = m.userData;
-                const s = 0.9 + 0.4 * Math.sin(t * 2.2 + seed * 9);
+                // Spin EVO halo rings
+                if (m.userData?.ringFor) {
+                    m.rotation.z = t * 0.6 + (m.userData.seed || 0) * 4;
+                    m.material.opacity = 0.35 + 0.3 * Math.sin(t * 2 + (m.userData.seed || 0) * 8);
+                    return;
+                }
+                const { seed, activation, isEvo } = m.userData;
+                const base = isEvo ? 1.3 : 0.9;
+                const amp = isEvo ? 0.6 : 0.4;
+                const s = base + amp * Math.sin(t * (isEvo ? 2.6 : 2.2) + seed * 9);
                 const scale = s * (0.8 + activation * 0.6);
                 m.scale.set(scale, scale, scale);
                 m.material.emissiveIntensity =
-                    1.0 + 0.8 * Math.sin(t * 2.4 + seed * 11);
+                    (isEvo ? 1.4 : 1.0) + 0.9 * Math.sin(t * 2.4 + seed * 11);
             });
 
             renderer.render(scene, camera);

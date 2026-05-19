@@ -8,6 +8,7 @@ import BrowserScreen from "@/components/BrowserScreen";
 import ServerScreen from "@/components/ServerScreen";
 import CodeScreen from "@/components/CodeScreen";
 import SatelliteScreen from "@/components/SatelliteScreen";
+import EvolutionScreen from "@/components/EvolutionScreen";
 
 const TAB_LABELS = {
     neural: "neural core // live lattice",
@@ -19,6 +20,7 @@ const TAB_LABELS = {
     code: "self-write // althea authors code",
     growth: "autopoiesis // grown capabilities",
     satellite: "satellite // L.E.O. mesh uplink",
+    evolution: "evolution // althea builds herself",
 };
 
 const TABS = [
@@ -31,6 +33,7 @@ const TABS = [
     { id: "code", label: "code" },
     { id: "growth", label: "growth" },
     { id: "satellite", label: "satellite" },
+    { id: "evolution", label: "evolution" },
 ];
 
 const CenterDeck = ({
@@ -131,6 +134,11 @@ const CenterDeck = ({
                 {tab === "satellite" && (
                     <div className="absolute inset-0">
                         <SatelliteScreen />
+                    </div>
+                )}
+                {tab === "evolution" && (
+                    <div className="absolute inset-0">
+                        <EvolutionScreen />
                     </div>
                 )}
             </div>

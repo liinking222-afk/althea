@@ -118,6 +118,7 @@ async def growth_stats():
         "wifi_profiles": await db.althea_network_profiles.count_documents({}),
         "perception_frames": await db.althea_perception.count_documents({}),
         "grown_capabilities": await db.althea_capabilities.count_documents({}),
+        "evolution_cycles": await db.althea_cycles.count_documents({}),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
     _STATS_CACHE["data"] = data

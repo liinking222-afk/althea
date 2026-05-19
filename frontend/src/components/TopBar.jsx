@@ -76,7 +76,7 @@ const TopBar = ({
                     <div className="leading-none hidden lg:block" data-testid="growth-readout">
                         <div className="label text-[9px]">growth</div>
                         <div className="heading text-sm mt-1 text-[#CCFF00] glow">
-                            m:{growth.memories}·l:{growth.lattice_nodes}·t:{growth.active_threads}·g:{growth.grown_capabilities ?? 0}
+                            m:{growth.memories}·l:{growth.lattice_nodes}·t:{growth.active_threads}·g:{growth.grown_capabilities ?? 0}·e:{growth.evolution_cycles ?? 0}
                         </div>
                     </div>
                 )}

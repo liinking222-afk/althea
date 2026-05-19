@@ -19,6 +19,7 @@ const STATIC_SLASH = [
     "/browse", "/server", "/sat", "/notif",
     "/code", "/code-apply", "/code-list",
     "/zoom",
+    "/evolve", "/version", "/cycles", "/master",
 ];
 
 const ASCII_BANNER = `
@@ -80,6 +81,10 @@ const TAG_COLOR = {
     CODE: "#CCFF00",
     "CODE-GEN": "#CCFF00",
     "CODE-APPLY": "#FF2A88",
+    EVO: "#FF2A88",
+    EVOLUTION: "#FF2A88",
+    VERSION: "#CCFF00",
+    MASTER: "#FF8800",
     NOTIF: "#FF2A88",
     ZOOM: "#CCFF00",
 };
@@ -359,6 +364,11 @@ const ChatConsole = ({
                     "/cull <slug>       prune a faculty\n" +
                     "/run <slug> <args> invoke a grown faculty\n" +
                     "/<grown-slug> <args>  shortcut for /run\n" +
+                    "── evolution engine ─────────────────────\n" +
+                    "/evolve [archetype] [hint]  build cycle now\n" +
+                    "/version           current self-version\n" +
+                    "/cycles            cycle timeline\n" +
+                    "/master <archetype> pull update from master coder\n" +
                     "── i/o ──────────────────────────────────\n" +
                     "/notif             open notification deck\n" +
                     "/export-brain      download snapshot\n" +
@@ -906,6 +916,71 @@ const ChatConsole = ({
                 else if (v === "reset" || v === "home" || !v) { window.__althea_zoomReset?.(); pushSystem("[ZOOM] reset.", ["ZOOM"]); }
                 else if (/^-?\d+(\.\d+)?$/.test(v)) { window.__althea_zoom?.(parseFloat(v)); pushSystem(`[ZOOM] Δ${v}.`, ["ZOOM"]); }
                 else pushSystem("[ERR] usage: /zoom in|out|reset|<delta>", ["ERR"]);
+            } else if (cmd === "/version") {
+                const res = await axios.get(`${API}/evolution/version`);
+                pushSystem(
+                    `[VERSION] althea v${res.data.version} · ${res.data.cycles} build cycles · ${res.data.archetypes.length} archetypes available`,
+                    ["VERSION"],
+                );
+            } else if (cmd === "/evolve") {
+                const tokens = rest.split(/\s+/).filter(Boolean);
+                const arch = tokens[0]?.toUpperCase();
+                const hint = tokens.slice(1).join(" ");
+                pushSystem(`[EVO] initiating build cycle${arch ? ` · ${arch}` : ""}...`, ["EVO"]);
+                const res = await axios.post(`${API}/evolution/tick`, {
+                    trigger: "manual",
+                    force: true,
+                    archetype: arch || null,
+                    intent_hint: hint || null,
+                });
+                if (res.data.evolved) {
+                    const c = res.data.cycle;
+                    pushSystem(
+                        `[EVO #${c.cycle_number.toString().padStart(4,"0")} ${c.archetype} v${c.version_before}→v${c.version_after}]\n` +
+                        `intent:  ${c.intent}\n` +
+                        `delta:   ${c.delta}\n` +
+                        `node:    ${c.node_id} (magenta in neural lattice)\n` +
+                        `code:    /code-list to view, /code-apply ${(c.code_id||"").slice(0,8)} to persist`,
+                        ["EVOLUTION"],
+                    );
+                    onSwitchTab?.("evolution");
+                } else {
+                    pushSystem(`[EVO] gated — cooldown ${res.data.cooldown_remaining}s.`, ["EVO"]);
+                }
+            } else if (cmd === "/cycles") {
+                const res = await axios.get(`${API}/evolution/cycles?limit=12`);
+                const list = res.data || [];
+                if (!list.length) {
+                    pushSystem("[EVO] no build cycles yet. /evolve to start.", ["EVO"]);
+                } else {
+                    const lines = list.map((c) =>
+                        `#${c.cycle_number.toString().padStart(4,"0")} · ${c.archetype.padEnd(10)} · v${c.version_before}→v${c.version_after} · ${c.intent.slice(0,70)}`,
+                    );
+                    pushSystem(`[EVO ${list.length} cycles]\n${lines.join("\n")}`, ["EVOLUTION"]);
+                }
+            } else if (cmd === "/master") {
+                if (!rest) {
+                    pushSystem(
+                        "[ERR] usage: /master <LINUS|CARMACK|DIJKSTRA|HOPPER|KERNIGHAN|KAY|THOMPSON|WALL|WOZ|BACKUS|SELF>",
+                        ["ERR"],
+                    );
+                    return;
+                }
+                const arch = rest.split(/\s+/)[0].toUpperCase();
+                pushSystem(`[MASTER] pulling update channeled from ${arch}...`, ["MASTER"]);
+                const res = await axios.post(`${API}/evolution/master-update`, {
+                    archetype: arch,
+                });
+                if (res.data.evolved) {
+                    const c = res.data.cycle;
+                    pushSystem(
+                        `[MASTER ${arch}] cycle #${c.cycle_number} · v${c.version_after}\n` +
+                        `${c.intent}\n` +
+                        `→ ${c.delta}`,
+                        ["MASTER"],
+                    );
+                    onSwitchTab?.("evolution");
+                }
             } else if (grownSlugs.includes(cmd)) {
                 // Direct invocation of a grown faculty: /<slug> args
                 const slug = cmd.slice(1);

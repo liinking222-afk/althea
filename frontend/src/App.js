@@ -106,6 +106,31 @@ function App() {
         notifications.refresh();
     }, [notifications]);
 
+    // Autonomous EVOLUTION poller — every 80s ask the server for a build cycle.
+    // Server cooldown=75s keeps it bounded. New EVO-XXXX nodes appear in the
+    // 3D lattice as magenta satellites within 5s of each successful cycle.
+    useEffect(() => {
+        let cancelled = false;
+        const autoEvolve = async () => {
+            try {
+                const res = await axios.post(`${API}/evolution/tick`, {
+                    trigger: "autonomous",
+                });
+                if (!cancelled && res.data?.evolved) {
+                    notifications.refresh();
+                }
+            } catch (_) {/* ignore */}
+        };
+        const t = setInterval(autoEvolve, 80000);
+        const first = setTimeout(autoEvolve, 35000); // first cycle ~35s after boot
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+            clearTimeout(first);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const openMemoryWithQuery = useCallback((query) => {
         setMemoryInitialQuery(query || "");
         setMemoryOpen(true);
