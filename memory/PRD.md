@@ -55,7 +55,15 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-19 — Iteration 16 (THIS SESSION)
+### 2026-05-19 — Iteration 17 (THIS SESSION)
+- **Quantum Mind OS Integration** — operator dropped a complete JS module (QuantumState + MemoryLattice + 3 simulated agents + QuantumMindOS kernel + runQuantumOS entry point). Integrated verbatim with non-breaking adapters (ES exports, pub/sub for React subscribers, reset/snapshot).
+- New **QUANTUM tab** (`QuantumScreen.jsx`) renders the live in-browser neural brain as an SVG graph: deterministic hash-based radial layout, `core_node` glowing yellow at center, recently-fired nodes pulse magenta with a radial fire gradient, edges weight-proportional. Right sidebar shows last collapse (superposition layers + collapsed result + recalled memory).
+- New slash commands `/quantum <input>`, `/qstatus`, `/qwipe`. Help text updated.
+- QuantumMindOS singleton (`quantumOS`) is shared between QuantumScreen and ChatConsole — invoking via terminal updates the live brain in the tab without round-trip.
+- systemMap entry added so Althea is self-aware of the quantum kernel.
+- **testing_agent_v3_fork iteration_17.json** — Frontend 100% pass.
+
+### 2026-05-19 — Iteration 16
 - **ALTHEA EVOLUTION ENGINE** — autonomous self-update + master-coder channels.
   - 11 archetypes: LINUS, CARMACK, DIJKSTRA, HOPPER, KERNIGHAN, KAY, THOMPSON, WALL, WOZ, BACKUS, SELF.
   - `POST /api/evolution/tick` — runs one build cycle. Claude channels the chosen archetype, writes ONE concrete self-improvement code module, persists to /app/althea_grown_code/, spawns a magenta `EVO-XXXX` lattice node with halo ring, bumps Althea's semantic version (patch for archetype cycles, minor for SELF), emits a notification.
