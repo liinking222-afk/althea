@@ -201,4 +201,10 @@ export const SYSTEM_CAPABILITIES = [
         description:
             "AUTONOMOUS SELF-UPDATE — ALTHEA builds herself while idle. Every ~80 seconds (server cooldown 75s) she runs a BUILD CYCLE: picks a legendary-coder archetype (LINUS / CARMACK / DIJKSTRA / HOPPER / KERNIGHAN / KAY / THOMPSON / WALL / WOZ / BACKUS / SELF) and channels their doctrine to write ONE new self-improvement module. Each cycle bumps her semantic version (patch for archetypes, minor for SELF), persists code to /app/althea_grown_code/, spawns a magenta EVO-XXXX node visible in the 3D neural lattice, and emits a notification. Slash commands: /evolve [archetype] [hint], /version, /cycles, /master <archetype>. The EVOLUTION tab in the center deck has a cycle timeline + a master-coder channel grid where operator can click an archetype to pull an update from that doctrine.",
     },
+    {
+        name: "QuantumMindOS",
+        testid: "center-tab-quantum",
+        description:
+            "QUANTUM MIND OS — a client-side cognitive kernel ALTHEA carries with her. Runs three internal agents (PLANNER, REASONER, CRITIC) in superposition, then collapses via weighted quantum-fuse into a single response. Every input also seeds a live neural memory lattice that pulses in the QUANTUM tab — recently fired nodes glow magenta, entangled links re-strengthen the synapses. core_node sits at the center of the brain. Slash commands: /quantum <input>, /qstatus, /qwipe. Lives in /app/frontend/src/lib/quantumMindOS.js — pure JS, no backend round-trip, fully runtime-introspectable.",
+    },
 ];

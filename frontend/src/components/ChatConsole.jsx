@@ -3,6 +3,7 @@ import axios from "axios";
 import { API } from "@/App";
 import { offlineReply } from "@/lib/offlineFallback";
 import { SYSTEM_CAPABILITIES } from "@/lib/systemMap";
+import { runQuantumOS, quantumOS } from "@/lib/quantumMindOS";
 
 // Static slash commands. Grown capability slugs are merged at runtime.
 const STATIC_SLASH = [
@@ -20,6 +21,7 @@ const STATIC_SLASH = [
     "/code", "/code-apply", "/code-list",
     "/zoom",
     "/evolve", "/version", "/cycles", "/master",
+    "/quantum", "/qstatus", "/qwipe",
 ];
 
 const ASCII_BANNER = `
@@ -85,6 +87,10 @@ const TAG_COLOR = {
     EVOLUTION: "#FF2A88",
     VERSION: "#CCFF00",
     MASTER: "#FF8800",
+    QUANTUM: "#00F0FF",
+    "Q-COLLAPSE": "#00F0FF",
+    "Q-STATUS": "#00F0FF",
+    "Q-WIPE": "#FF8800",
     NOTIF: "#FF2A88",
     ZOOM: "#CCFF00",
 };
@@ -369,6 +375,10 @@ const ChatConsole = ({
                     "/version           current self-version\n" +
                     "/cycles            cycle timeline\n" +
                     "/master <archetype> pull update from master coder\n" +
+                    "── quantum mind os ──────────────────────\n" +
+                    "/quantum <input>   collapse plan/reason/critic superposition\n" +
+                    "/qstatus           quantum brain status\n" +
+                    "/qwipe             reset quantum memory lattice\n" +
                     "── i/o ──────────────────────────────────\n" +
                     "/notif             open notification deck\n" +
                     "/export-brain      download snapshot\n" +
@@ -981,6 +991,36 @@ const ChatConsole = ({
                     );
                     onSwitchTab?.("evolution");
                 }
+            } else if (cmd === "/quantum") {
+                if (!rest) {
+                    pushSystem("[ERR] usage: /quantum <input>", ["ERR"]);
+                    return;
+                }
+                pushSystem(`[QUANTUM] collapsing superposition for: "${rest}"...`, ["QUANTUM"]);
+                const r = await runQuantumOS(rest);
+                if (typeof r === "string") {
+                    pushSystem(`[Q-STATUS] ${r}`, ["Q-STATUS"]);
+                } else {
+                    pushSystem(
+                        `[Q-COLLAPSE input:"${r.input}"]\n` +
+                        `superposition: ${r.superposition.length} layers (plan|reason|critic)\n` +
+                        `collapsed →\n${r.collapsed}\n` +
+                        `brain: ${r.brain.nodes.length} nodes · ${r.brain.edges.length} synapses\n` +
+                        `(switch to QUANTUM tab for live brain visualization)`,
+                        ["Q-COLLAPSE"],
+                    );
+                    onSwitchTab?.("quantum");
+                }
+            } else if (cmd === "/qstatus") {
+                const r = await runQuantumOS("/status");
+                const g = quantumOS.snapshot();
+                pushSystem(
+                    `[Q-STATUS] ${r}\nbrain: ${g.nodes.length} nodes · ${g.edges.length} synapses`,
+                    ["Q-STATUS"],
+                );
+            } else if (cmd === "/qwipe") {
+                quantumOS.reset();
+                pushSystem("[Q-WIPE] quantum memory lattice cleared. brain dormant.", ["Q-WIPE"]);
             } else if (grownSlugs.includes(cmd)) {
                 // Direct invocation of a grown faculty: /<slug> args
                 const slug = cmd.slice(1);

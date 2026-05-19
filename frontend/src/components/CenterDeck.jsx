@@ -9,6 +9,7 @@ import ServerScreen from "@/components/ServerScreen";
 import CodeScreen from "@/components/CodeScreen";
 import SatelliteScreen from "@/components/SatelliteScreen";
 import EvolutionScreen from "@/components/EvolutionScreen";
+import QuantumScreen from "@/components/QuantumScreen";
 
 const TAB_LABELS = {
     neural: "neural core // live lattice",
@@ -21,6 +22,7 @@ const TAB_LABELS = {
     growth: "autopoiesis // grown capabilities",
     satellite: "satellite // L.E.O. mesh uplink",
     evolution: "evolution // althea builds herself",
+    quantum: "quantum mind os // live neural brain",
 };
 
 const TABS = [
@@ -34,6 +36,7 @@ const TABS = [
     { id: "growth", label: "growth" },
     { id: "satellite", label: "satellite" },
     { id: "evolution", label: "evolution" },
+    { id: "quantum", label: "quantum" },
 ];
 
 const CenterDeck = ({
@@ -139,6 +142,11 @@ const CenterDeck = ({
                 {tab === "evolution" && (
                     <div className="absolute inset-0">
                         <EvolutionScreen />
+                    </div>
+                )}
+                {tab === "quantum" && (
+                    <div className="absolute inset-0">
+                        <QuantumScreen />
                     </div>
                 )}
             </div>
