@@ -88,6 +88,15 @@ async def ingest_frame(req: PerceptionFrame):
     }
 
 
+@router.get("/perception/log")
+async def perception_log(limit: int = 20):
+    """Recent self-vision reflection memories — for the self-observation panel."""
+    docs = await db.althea_memories.find(
+        {"tags": "self-vision"}, {"_id": 0}
+    ).sort("timestamp", -1).to_list(max(1, min(limit, 100)))
+    return {"count": len(docs), "entries": docs}
+
+
 @router.get("/perception/latest")
 async def latest_frame(include_image: bool = False):
     """Return metadata about the most recent frame. Image body opt-in."""

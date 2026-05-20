@@ -1,12 +1,46 @@
-"""System capability map + brain snapshot/restore."""
+"""System capability map + brain snapshot/restore + status."""
+import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
-from core import db
+from core import db, EMERGENT_LLM_KEY
 from models import BrainRestoreRequest, CapabilityMapRequest, Memory
 
 router = APIRouter()
+
+# Boot-time marker so /status can report uptime.
+_BOOT_AT = time.time()
+ALTHEA_VERSION = "1.4.0"
+
+
+@router.get("/status")
+async def system_status():
+    """Health probe — Mongo reachability, LLM key presence, key counters."""
+    mongo_ok = True
+    memories = 0
+    nodes = 0
+    cycles = 0
+    try:
+        memories = await db.althea_memories.count_documents({})
+        nodes = await db.althea_nodes.count_documents({})
+        cycles = await db.althea_cycles.count_documents({})
+    except Exception:
+        logging.exception("status: mongo probe failed")
+        mongo_ok = False
+
+    return {
+        "status": "OPERATIONAL" if mongo_ok else "DEGRADED",
+        "version": ALTHEA_VERSION,
+        "uptime_seconds": round(time.time() - _BOOT_AT, 1),
+        "mongo_ok": mongo_ok,
+        "llm_ok": bool(EMERGENT_LLM_KEY),
+        "memories": memories,
+        "lattice_nodes": nodes,
+        "evolution_cycles": cycles,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.post("/system-map")

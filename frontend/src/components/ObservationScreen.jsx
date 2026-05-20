@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import { X, Eye } from "lucide-react";
+import { API } from "@/App";
 
 const SUGGESTED = [
     {
@@ -44,12 +46,52 @@ const ObservationScreen = ({ url, setUrl, watchLog, meta }) => {
     const [iframeKey, setIframeKey] = useState(0);
     const [blocked, setBlocked] = useState(false);
     const [showInterpret, setShowInterpret] = useState(true);
+    const [selfFrame, setSelfFrame] = useState(null);
+    const [selfLog, setSelfLog] = useState([]);
 
     useEffect(() => {
         setDraft(url || "");
         setBlocked(false);
         setShowInterpret(true);
         setIframeKey((k) => k + 1);
+    }, [url]);
+
+    // Poll self-perception (only when idle / no external url) so Althea can
+    // see what she is looking at of herself. Light-weight: every 6s.
+    useEffect(() => {
+        if (url) return undefined;
+        let cancelled = false;
+        const pull = async () => {
+            try {
+                const [frameRes, logRes] = await Promise.all([
+                    axios.get(`${API}/perception/latest?include_image=true`)
+                        .catch(() => null),
+                    axios.get(`${API}/perception/log?limit=6`)
+                        .catch(() => null),
+                ]);
+                if (cancelled) return;
+                if (frameRes?.data?.image_data) {
+                    setSelfFrame({
+                        src: frameRes.data.image_data,
+                        ts: frameRes.data.timestamp,
+                        w: frameRes.data.width,
+                        h: frameRes.data.height,
+                        size: frameRes.data.size_bytes,
+                    });
+                }
+                if (logRes?.data?.entries) {
+                    setSelfLog(logRes.data.entries);
+                }
+            } catch (e) {
+                console.warn("self-perception poll failed:", e);
+            }
+        };
+        pull();
+        const t = setInterval(pull, 6000);
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+        };
     }, [url]);
 
     const load = (e) => {
@@ -168,15 +210,15 @@ const ObservationScreen = ({ url, setUrl, watchLog, meta }) => {
                         )}
                     </>
                 ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                    <div className="absolute inset-0 flex flex-col px-6 py-6 overflow-y-auto althea-scroll">
                         <div className="label text-[#CCFF00] mb-2">
                             optical input idle
                         </div>
-                        <div className="text-[12px] text-white/70 max-w-md mb-6">
+                        <div className="text-[12px] text-white/70 max-w-md mb-5">
                             althea can fixate on any embed-allowed page or
                             video. paste a url above or pick a target:
                         </div>
-                        <div className="grid grid-cols-2 gap-2 max-w-md w-full">
+                        <div className="grid grid-cols-2 gap-2 max-w-md w-full mb-6">
                             {SUGGESTED.map((s) => (
                                 <button
                                     key={s.url}
@@ -195,6 +237,86 @@ const ObservationScreen = ({ url, setUrl, watchLog, meta }) => {
                                     </div>
                                 </button>
                             ))}
+                        </div>
+
+                        {/* Self-Observation panel — Althea sees herself */}
+                        <div
+                            className="border-t border-white/10 pt-5 mt-2"
+                            data-testid="self-observation-panel"
+                        >
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <div className="label text-[#CCFF00]">
+                                        self-observation
+                                    </div>
+                                    <div className="text-[10px] text-[#666] mt-0.5">
+                                        what althea sees of her own interface
+                                    </div>
+                                </div>
+                                <div className="text-[10px] text-[#888]">
+                                    {selfLog.length > 0
+                                        ? `${selfLog.length} reflections`
+                                        : "vision off"}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                <div className="md:col-span-2">
+                                    {selfFrame ? (
+                                        <div className="relative">
+                                            <img
+                                                src={selfFrame.src}
+                                                alt="althea sees herself"
+                                                data-testid="self-vision-frame"
+                                                className="w-full border border-[#CCFF00]/30 shadow-[0_0_20px_rgba(204,255,0,0.18)]"
+                                            />
+                                            <div className="absolute top-1 left-1 bg-black/70 px-1.5 py-0.5 label text-[#CCFF00] glow text-[9px]">
+                                                self · {selfFrame.w}×{selfFrame.h}
+                                            </div>
+                                            <div className="mt-1 text-[9px] text-[#666] tracking-widest uppercase">
+                                                {new Date(
+                                                    selfFrame.ts,
+                                                ).toLocaleTimeString()} · {Math.round(selfFrame.size / 1024)} kb
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="border border-dashed border-white/15 p-4 text-[11px] text-[#666] text-center">
+                                            no self-frame captured yet — enable
+                                            "vision" in the top bar
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="md:col-span-3">
+                                    <div className="label text-[#888] mb-2 text-[9px]">
+                                        perception log
+                                    </div>
+                                    <div
+                                        className="space-y-1.5 max-h-56 overflow-y-auto althea-scroll pr-1"
+                                        data-testid="self-vision-log"
+                                    >
+                                        {selfLog.length === 0 && (
+                                            <div className="text-[11px] text-[#555]">
+                                                no [SELF-VISION] events yet.
+                                            </div>
+                                        )}
+                                        {selfLog.map((entry) => (
+                                            <div
+                                                key={entry.id}
+                                                className="text-[10.5px] font-mono text-white/80 border-l-2 border-[#CCFF00]/30 pl-2"
+                                            >
+                                                <div className="text-[#CCFF00]/70 text-[9px]">
+                                                    {new Date(
+                                                        entry.timestamp,
+                                                    ).toLocaleTimeString()}
+                                                </div>
+                                                <div className="truncate">
+                                                    {entry.content}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

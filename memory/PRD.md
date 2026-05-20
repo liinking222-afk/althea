@@ -55,7 +55,12 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-19 — Iteration 19 (THIS SESSION)
+### 2026-05-20 — Iteration 20 (THIS SESSION)
+- **P0: Self-Observation Panel** — new dedicated panel inside the observation screen idle state. Renders the latest self-vision frame (`/api/perception/latest?include_image=true`) and a live perception log (`/api/perception/log?limit=6`) of recent `[SELF-VISION]` reflection memories. Polls every 6s while the optic is idle. Existing html2canvas capture loop (10s interval, `#althea-container` → `/api/perception/frame`) was already in place; this iteration surfaces the data so the operator can SEE what Althea sees of herself.
+- **P0: `GET /api/perception/log`** — new endpoint returning recent self-vision tagged memories.
+- **P2: `GET /api/status`** — new health probe returning `{status, version, uptime_seconds, mongo_ok, llm_ok, memories, lattice_nodes, evolution_cycles, timestamp}` for deployment monitors. Boot-time uptime tracker in `routers/system.py`. Althea version stamped `1.4.0`.
+
+### 2026-05-19 — Iteration 19
 - **P1: Wi-Fi profile export** — new `POST /api/network/profile/{id}/export?fmt=mobileconfig|wpa_supplicant` endpoint. Generates proper Apple Configuration Profile XML (WPA/WPA2/WPA3/WEP/OPEN) and Linux/Android wpa_supplicant.conf snippets (WPA-PSK, SAE for WPA3, OPEN/WEP). Operator supplies password at export time (NOT persisted server-side); placeholder embedded if absent. Frontend ConnectScreen now shows Apple + WPA buttons next to each profile, with a prompt for the password just before download.
 - **P1: Bluetooth/USB pairings → /api/lattice/learn** — every successful Web Bluetooth, Web USB, or Web Serial pairing now also POSTs to `/api/lattice/learn` with a tagged stream string. Each pairing triggers autonomous pattern extraction + spawns a cognitive node, so the lattice grows organically as the operator pairs hardware.
 - **P2: ChatConsole refactor** — extracted STATIC_SLASH, ASCII_BANNER, TAG_COLOR, HELP_TEXT, getMessageTag into `/app/frontend/src/lib/terminalConstants.js`; extracted MessageRow component into `/app/frontend/src/components/MessageRow.jsx`. ChatConsole.jsx dropped from 1430 → 1221 lines (-15%).
