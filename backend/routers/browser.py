@@ -3,24 +3,42 @@ title/text/links so the operator can surf the web through her.
 
 Cross-origin iframe still works via /watch, this is for headless surfing
 (reading article text, extracting links, search-style results).
+Also exposes a full HTML proxy at /browser/proxy that strips X-Frame-Options
++ CSP frame-ancestors so any site can be rendered inside ALTHEA's viewport
+the way Chrome would render it.
 """
 import logging
 import re
 from datetime import datetime, timezone
 from typing import List
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse, Response
 
 from core import db
 from models import BrowserFetchRequest, Memory
 
 router = APIRouter()
 
-UA = "Mozilla/5.0 (Althea-Browser/1.0; +https://althea.local)"
+UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
 MAX_TEXT = 12000
+MAX_PROXY_BYTES = 8 * 1024 * 1024  # 8MB per page
+
+# Headers stripped on the way out so the browser can iframe the response
+FRAME_BLOCKING_HEADERS = {
+    "x-frame-options",
+    "content-security-policy",
+    "content-security-policy-report-only",
+    "cross-origin-opener-policy",
+    "cross-origin-embedder-policy",
+    "cross-origin-resource-policy",
+}
 
 
 def _normalize_url(url: str) -> str:
