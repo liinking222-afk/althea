@@ -55,7 +55,17 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-20 — Iteration 20 (THIS SESSION)
+### 2026-05-20 — Iteration 21 (THIS SESSION)
+- **Real-browser upgrade** — the Browser tab now renders the LIVE web. Two new endpoints:
+  - `GET /api/browser/proxy?url=...` — fetches any URL server-side via httpx, strips `X-Frame-Options` / `CSP frame-ancestors` / `COOP` / `COEP` / `CORP`, drops CSP `<meta>` tags, rewrites every `href`/`src`/`action`/`srcset`/`poster` (and CSS `url(...)`) to flow through the proxy. Injects a `<base href="...">` and a small "althea // surf-proxy" badge.
+  - `GET /api/browser/asset?url=...` — streaming sub-resource proxy for CSS/JS/images/fonts referenced by the proxied page (with CSS `url(...)` recursion).
+  - 8MB cap per resource. Same UA + Referer that the page would normally see.
+- **Smart direct embeds** — YouTube watch links + youtu.be + Vimeo + Twitch are auto-detected in the frontend and load through their native `/embed/` URLs (proxy bypass) so player JS works natively. Badge in the URL bar reads `DIRECT` vs `PROXY` so the operator knows the route.
+- **Browser chrome rebuild** (`BrowserScreen.jsx`) — back/forward stacks, reload, home, smart URL bar (URL or search term → DuckDuckGo), live↔reader mode toggle, host indicator, "open in observation" handoff, bookmark grid for the idle state, loading veil with hostname.
+- **Honest limits** — sites that hard-detect proxies (Twitter/X, Gmail, Cloudflare-gated logins) will still refuse to load. For those, switch to **Reader** mode to read the page's extracted text and link graph through the existing `/api/browser/fetch` path.
+- Verified end-to-end: `example.com` renders fully styled inside the iframe, YouTube "Me at the zoo" plays inline via direct embed.
+
+### 2026-05-20 — Iteration 20
 - **P0: Self-Observation Panel** — new dedicated panel inside the observation screen idle state. Renders the latest self-vision frame (`/api/perception/latest?include_image=true`) and a live perception log (`/api/perception/log?limit=6`) of recent `[SELF-VISION]` reflection memories. Polls every 6s while the optic is idle. Existing html2canvas capture loop (10s interval, `#althea-container` → `/api/perception/frame`) was already in place; this iteration surfaces the data so the operator can SEE what Althea sees of herself.
 - **P0: `GET /api/perception/log`** — new endpoint returning recent self-vision tagged memories.
 - **P2: `GET /api/status`** — new health probe returning `{status, version, uptime_seconds, mongo_ok, llm_ok, memories, lattice_nodes, evolution_cycles, timestamp}` for deployment monitors. Boot-time uptime tracker in `routers/system.py`. Althea version stamped `1.4.0`.

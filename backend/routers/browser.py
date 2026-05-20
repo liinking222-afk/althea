@@ -140,3 +140,226 @@ async def browser_history(limit: int = 30):
         {"tags": "browser"}, {"_id": 0}
     ).sort("timestamp", -1).to_list(limit)
     return {"history": docs, "count": len(docs)}
+
+
+# ---------------------------------------------------------------------------
+# FULL HTML PROXY  /api/browser/proxy?url=...
+# Strips X-Frame-Options / CSP, rewrites links + asset srcs to flow through
+# the proxy so the operator can iframe ANY site that does not actively detect
+# proxies. Login-walled SPAs (Twitter, Gmail) and Cloudflare-gated sites may
+# still refuse, but ~80% of the open web renders fine.
+# ---------------------------------------------------------------------------
+URL_ATTRS = ("href", "src", "action", "data-src", "srcset", "poster")
+
+
+def _proxy_url(absolute: str, base_api: str) -> str:
+    return f"{base_api}/browser/asset?url={quote(absolute, safe='')}"
+
+
+def _rewrite_srcset(value: str, page_url: str, base_api: str) -> str:
+    parts = []
+    for chunk in value.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        bits = chunk.split()
+        if not bits:
+            continue
+        absolute = urljoin(page_url, bits[0])
+        parts.append(" ".join([_proxy_url(absolute, base_api)] + bits[1:]))
+    return ", ".join(parts)
+
+
+def _rewrite_html(html: str, page_url: str, base_api: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Inject <base> so relative URLs resolve, even though we rewrite most of
+    # them. Some inline JS uses document.baseURI.
+    head = soup.find("head")
+    if head:
+        base = soup.new_tag("base", href=page_url)
+        head.insert(0, base)
+        # Drop CSP <meta> tags so the iframe is not double-locked.
+        for m in head.find_all(
+            "meta",
+            attrs={
+                "http-equiv": re.compile(
+                    r"content-security-policy|x-frame-options", re.I,
+                )
+            },
+        ):
+            m.extract()
+
+    # Walk every element with a URL attribute and rewrite through the proxy.
+    for tag in soup.find_all(True):
+        if tag.name == "base":
+            continue
+        for attr in URL_ATTRS:
+            if attr not in tag.attrs:
+                continue
+            value = tag.attrs[attr]
+            if not isinstance(value, str):
+                continue
+            if value.startswith(("data:", "javascript:", "mailto:", "tel:", "#")):
+                continue
+            if attr == "srcset":
+                tag.attrs[attr] = _rewrite_srcset(value, page_url, base_api)
+                continue
+            absolute = urljoin(page_url, value.strip())
+            if tag.name == "a" and attr == "href":
+                # Anchor clicks should re-enter the HTML proxy (not asset).
+                tag.attrs[attr] = (
+                    f"{base_api}/browser/proxy?url={quote(absolute, safe='')}"
+                )
+                tag.attrs["target"] = "_self"
+                continue
+            if tag.name == "form" and attr == "action":
+                tag.attrs[attr] = (
+                    f"{base_api}/browser/proxy?url={quote(absolute, safe='')}"
+                )
+                continue
+            tag.attrs[attr] = _proxy_url(absolute, base_api)
+
+    # Tiny status badge so the operator knows they are inside Althea's proxy.
+    badge = soup.new_tag("div")
+    badge["style"] = (
+        "position:fixed;bottom:8px;right:8px;z-index:2147483647;"
+        "font:10px/1.2 monospace;letter-spacing:1px;text-transform:uppercase;"
+        "color:#CCFF00;background:rgba(0,0,0,0.6);"
+        "padding:4px 8px;border:1px solid rgba(204,255,0,0.35);"
+        "pointer-events:none;backdrop-filter:blur(4px);"
+    )
+    badge.string = "althea // surf-proxy"
+    body = soup.find("body")
+    if body:
+        body.append(badge)
+
+    return str(soup)
+
+
+def _strip_frame_headers(headers: dict) -> dict:
+    cleaned = {}
+    for k, v in headers.items():
+        if k.lower() in FRAME_BLOCKING_HEADERS:
+            continue
+        if k.lower() in ("content-encoding", "content-length", "transfer-encoding"):
+            # httpx already decoded the body; pass-through length is wrong.
+            continue
+        cleaned[k] = v
+    return cleaned
+
+
+def _base_api(request: Request) -> str:
+    # Build "<scheme>://<host>/api" regardless of ingress.
+    scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{scheme}://{host}/api"
+
+
+@router.get("/browser/proxy")
+async def browser_proxy(request: Request, url: str):
+    target = _normalize_url(url)
+    if not target:
+        raise HTTPException(status_code=400, detail="empty_url")
+
+    # Smart YouTube redirect → embed (no proxy needed, YouTube allows /embed/).
+    try:
+        parsed = urlparse(target)
+        host = (parsed.hostname or "").replace("www.", "")
+        if host in ("youtube.com", "m.youtube.com"):
+            from urllib.parse import parse_qs
+            v = parse_qs(parsed.query).get("v", [None])[0]
+            if v:
+                target = f"https://www.youtube.com/embed/{v}?autoplay=1"
+        elif host == "youtu.be":
+            vid = parsed.path.lstrip("/")
+            if vid:
+                target = f"https://www.youtube.com/embed/{vid}?autoplay=1"
+    except Exception:
+        logging.exception("youtube rewrite failed")
+
+    base_api = _base_api(request)
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={
+                "User-Agent": UA,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        ) as cx:
+            r = await cx.get(target)
+            content = r.content[:MAX_PROXY_BYTES]
+            content_type = r.headers.get("content-type", "text/html").lower()
+            final_url = str(r.url)
+    except httpx.RequestError as e:
+        return HTMLResponse(
+            f"<html><body style='font:14px monospace;color:#FF2A2A;"
+            f"background:#000;padding:24px;'>[PROXY-FAIL] {str(e)[:240]}</body></html>",
+            status_code=502,
+        )
+
+    headers = _strip_frame_headers(dict(r.headers))
+
+    if "text/html" in content_type:
+        try:
+            html = content.decode(r.encoding or "utf-8", errors="ignore")
+        except Exception:
+            html = content.decode("utf-8", errors="ignore")
+        rewritten = _rewrite_html(html, final_url, base_api)
+        headers["content-type"] = "text/html; charset=utf-8"
+        return HTMLResponse(content=rewritten, status_code=r.status_code, headers=headers)
+
+    # Non-HTML (PDF, image served directly etc.) → pass straight through.
+    return Response(content=content, status_code=r.status_code, headers=headers, media_type=content_type)
+
+
+@router.get("/browser/asset")
+async def browser_asset(request: Request, url: str):
+    """Stream any sub-resource (CSS/JS/image/font) referenced by the proxied page."""
+    target = _normalize_url(url)
+    if not target:
+        raise HTTPException(status_code=400, detail="empty_url")
+
+    base_api = _base_api(request)
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={
+                "User-Agent": UA,
+                "Accept": "*/*",
+                "Referer": target,
+            },
+        ) as cx:
+            r = await cx.get(target)
+            content = r.content[:MAX_PROXY_BYTES]
+            content_type = r.headers.get("content-type", "application/octet-stream").lower()
+    except httpx.RequestError as e:
+        return Response(
+            content=f"/* proxy fail: {str(e)[:140]} */",
+            status_code=502,
+            media_type="text/plain",
+        )
+
+    headers = _strip_frame_headers(dict(r.headers))
+
+    # Rewrite CSS url(...) and @import so background-images and fonts still
+    # load through the proxy.
+    if "text/css" in content_type:
+        try:
+            css = content.decode("utf-8", errors="ignore")
+        except Exception:
+            css = ""
+        def _sub(m):
+            raw = m.group(1).strip("'\"")
+            if raw.startswith(("data:", "#")):
+                return m.group(0)
+            absolute = urljoin(target, raw)
+            return f"url({_proxy_url(absolute, base_api)})"
+        css = re.sub(r"url\(([^)]+)\)", _sub, css)
+        return Response(content=css, status_code=r.status_code, headers=headers, media_type="text/css; charset=utf-8")
+
+    return Response(content=content, status_code=r.status_code, headers=headers, media_type=content_type)
