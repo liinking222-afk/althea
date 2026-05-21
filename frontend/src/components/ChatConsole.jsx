@@ -279,6 +279,25 @@ const ChatConsole = ({
                     `[REPAIR] ${actions.length ? actions.join("; ") : "no repair actions required."}`,
                     ["DIAGNOSE"],
                 );
+            } else if (cmd === "/consolidate") {
+                const keep = parseInt(rest, 10) || 5000;
+                const res = await axios.post(
+                    `${API}/memory/consolidate?keep_recent=${keep}`,
+                );
+                const d = res.data || {};
+                if (!d.consolidated) {
+                    pushSystem(
+                        `[MEMORY] no consolidation needed. total=${d.total} keep=${d.keep_recent}`,
+                        ["MEMORY"],
+                    );
+                } else {
+                    pushSystem(
+                        `[MEMORY] consolidated ${d.merged} episodes into ` +
+                        `${d.consolidated_memories_created} summaries. ` +
+                        `remaining=${d.remaining_total}.`,
+                        ["MEMORY"],
+                    );
+                }
             } else if (cmd === "/status") {
                 const [g, lat, ths] = await Promise.all([
                     axios.get(`${API}/growth/stats`),

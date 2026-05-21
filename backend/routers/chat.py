@@ -20,7 +20,7 @@ from models import (
     NeuralState,
 )
 from system_prompt import ALTHEA_SYSTEM_PROMPT
-from utils import build_context_block, next_node_id
+from utils import build_context_block, next_node_id, semantic_recall
 from local_core import local_reply, sanitize_reply
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -62,15 +62,44 @@ async def chat(req: ChatRequest):
     auto_doc["timestamp"] = auto_doc["timestamp"].isoformat()
     await db.althea_memories.insert_one(auto_doc)
 
-    # Pull recent memories
+    # Pull recent memories — far more than before, plus a semantic recall
+    # against the operator's current message so older relevant fragments
+    # surface alongside the freshest ones. Effectively unlimited context
+    # because the deeper TF-IDF scan also runs over the recall corpus.
     mem_docs = await db.althea_memories.find({}, {"_id": 0}).sort(
         "timestamp", -1
-    ).to_list(20)
+    ).to_list(60)
+    relevant = []
+    try:
+        # Scan up to 10k recent memories with TF-IDF; pick top 12 most
+        # relevant to the current user message that AREN'T already in the
+        # recent window.
+        if (req.message or "").strip():
+            corpus = await db.althea_memories.find({}, {"_id": 0}).sort(
+                "timestamp", -1
+            ).to_list(10000)
+            recent_ids = {m.get("id") for m in mem_docs}
+            scored = semantic_recall(req.message, corpus, limit=18)
+            relevant = [m for m in scored if m.get("id") not in recent_ids][:12]
+    except Exception:
+        relevant = []
+
     memory_block = ""
-    if mem_docs:
-        lines = ["[LONG-TERM MEMORY — most-recent first]"]
-        for m in mem_docs:
-            lines.append(f"- ({m.get('source', 'auto')}) {m.get('content', '')[:240]}")
+    if mem_docs or relevant:
+        lines = []
+        if mem_docs:
+            lines.append("[LONG-TERM MEMORY — most-recent first]")
+            for m in mem_docs:
+                lines.append(f"- ({m.get('source', 'auto')}) {m.get('content', '')[:240]}")
+        if relevant:
+            lines.append("")
+            lines.append("[SEMANTIC RECALL — older fragments matching the current message]")
+            for m in relevant:
+                score = m.get("score")
+                tag = f"score={score:.2f}" if isinstance(score, (int, float)) else "match"
+                lines.append(
+                    f"- ({m.get('source', 'auto')} · {tag}) {m.get('content', '')[:240]}"
+                )
         memory_block = "\n".join(lines)
 
     ctx_block = build_context_block(req.context)

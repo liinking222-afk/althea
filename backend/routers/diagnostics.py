@@ -136,16 +136,18 @@ async def _check_autonomous_loops() -> dict:
 async def _check_memory_volume() -> dict:
     try:
         count = await db.althea_memories.count_documents({})
-        # Warn at >50k memories (TF-IDF stays fine until ~200k but lattice growth slows).
-        warn = count > 50000
+        # Memory storage is effectively unlimited; only warn if the lattice
+        # gets extreme enough that recall might slow down. Operator can
+        # consolidate via POST /api/memory/consolidate.
+        warn = count > 1_000_000
         return {
             "name": "memory_volume",
             "ok": True,
             "total": count,
-            "warn": "memory_collection_large" if warn else None,
+            "warn": "memory_corpus_huge" if warn else None,
             "remedy": (
-                "Optionally compact via DELETE /api/memory or archive older "
-                "memories to a snapshot." if warn else None
+                "Optionally compact via POST /api/memory/consolidate to fold "
+                "the oldest episodes into semantic summaries." if warn else None
             ),
         }
     except Exception as exc:

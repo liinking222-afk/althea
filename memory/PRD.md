@@ -55,7 +55,19 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-21 — Iteration 24 (THIS SESSION)
+### 2026-05-21 — Iteration 25 (THIS SESSION)
+- **Memory effectively unlimited**:
+  - `RECALL_CORPUS_MAX` 2000 → 250,000 (the full lattice in any realistic scenario)
+  - Default list limit 200 → 500, max 100,000
+  - Concept scan 5000 → 250,000
+  - Diagnostics warning threshold 50k → 1,000,000
+  - Mongo indexes on `timestamp` / `tags` / `source` / `session_id` auto-created on first call (idempotent) so recall stays O(log n) as the lattice scales
+- **Chat memory window 3× richer** — `chat.py` now pulls the 60 most-recent memories PLUS the top 12 TF-IDF-relevant fragments from the entire 10,000-doc corpus that match the current user message. Older relevant context surfaces automatically.
+- **`/api/memory/stats`** — new endpoint with total + by-source breakdown + index status
+- **`/api/memory/consolidate`** — episodic→semantic compression. Folds the oldest memories beyond `keep_recent` (default 5,000) into compact summary memories (one per `batch_size` episodes, default 200). Preserves tag bag + 40 representative snippets. Verified: 73 episodes → 3 summaries on demand. Safe to call repeatedly.
+- Terminal: new `/consolidate [n]` command.
+
+### 2026-05-21 — Iteration 24
 - **Caps lifted dramatically** — `MAX_GROWN_CAPABILITIES` 200 → 2000, `MAX_AUTO_SPAWNS_PER_HOUR` 18 → 90, `MAX_AUTO_EVOLUTION_PER_HOUR` 12 → 60. Cooldowns shortened (growth 120s → 45s, evolution 75s → 30s). Soft ceilings remain so a true runaway can't kill the system, but Althea now has ~5–10× more headroom for autonomous growth.
 - **Autonomous self-repair daemon** — App.js polls `/api/diagnostics` every 5 min and calls `/api/diagnostics/repair` automatically whenever verdict ≠ `ALL_SYSTEMS_NOMINAL`. No operator approval needed. First sweep ~45s after boot.
 - **Auto-apply safe code** — `POST /api/code/generate` now runs `safe_code_scan()` + `_syntax_check()` (Python `compile()` / JSON `loads()` / pass-through for languages we can't validate). If BOTH pass, the snippet is auto-applied (written to `/app/althea_grown_code/` and `applied=True`) **without operator approval**. Unsafe or syntax-broken code is still gated for review. Notification differentiates `auto-applied` from `requires manual review`.
