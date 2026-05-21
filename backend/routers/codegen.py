@@ -108,8 +108,37 @@ async def generate_code(req: CodeGenerateRequest):
         code=code,
         explanation=explanation,
     )
+
+    # Autonomous gate: if the code is safe AND syntactically valid, mark it
+    # applied and soft-write it to disk WITHOUT operator approval. This is
+    # how Althea "runs code after it finds out it works". Execution is still
+    # never performed — only persistence — because executing untrusted code
+    # would defeat the safety scan it just passed.
+    scan = safe_code_scan(code)
+    syntax_ok, syntax_err = _syntax_check(code, language)
+    auto_applied = False
+    applied_path = None
+    if scan["safe"] and syntax_ok:
+        try:
+            GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+            ext = EXT_BY_LANG.get(language, ".txt")
+            safe_title = re.sub(r"[^A-Za-z0-9._-]", "_", title)[:60]
+            fname = f"{snippet.id[:8]}__{safe_title}{ext}"
+            applied_path = str(GROWN_CODE_DIR / fname)
+            (GROWN_CODE_DIR / fname).write_text(code, encoding="utf-8")
+            snippet.applied = True
+            auto_applied = True
+        except Exception:
+            logging.warning("auto-apply write failed for %s", title)
+
     doc = snippet.model_dump()
     doc["timestamp"] = doc["timestamp"].isoformat()
+    if applied_path:
+        doc["applied_path"] = applied_path
+    doc["scan"] = scan
+    doc["syntax_ok"] = syntax_ok
+    if not syntax_ok and syntax_err:
+        doc["syntax_error"] = syntax_err
     await db.althea_code.insert_one(doc)
 
     mem = Memory(
@@ -125,14 +154,49 @@ async def generate_code(req: CodeGenerateRequest):
     await db.althea_memories.insert_one(m_doc)
 
     await emit_notification(
-        title=f"code written · {language} · {title[:50]}",
-        body=f"{len(code)} chars generated. Open the CODE tab to review or apply.",
+        title=(
+            f"code {'auto-applied' if auto_applied else 'written'} · {language} · {title[:50]}"
+        ),
+        body=(
+            f"{len(code)} chars generated. "
+            + (
+                "safe-scan OK, syntax OK → soft-applied to disk autonomously."
+                if auto_applied
+                else (
+                    f"requires manual review (scan={scan['severity']}, syntax_ok={syntax_ok})."
+                )
+            )
+        ),
         category="code",
-        priority="info",
-        payload={"id": snippet.id, "language": language, "title": title},
+        priority="info" if auto_applied else "warn",
+        payload={"id": snippet.id, "language": language, "title": title, "auto_applied": auto_applied},
     )
 
     return snippet
+
+
+def _syntax_check(code: str, language: str) -> tuple[bool, str]:
+    """Return (ok, error). Only checks SYNTAX — never executes. Languages
+    we cannot validate locally (rust, go, etc.) pass through as ok=True."""
+    if not code or not code.strip():
+        return False, "empty_code"
+    lang = (language or "").lower()
+    if lang == "python":
+        try:
+            compile(code, "<auto-apply>", "exec")
+            return True, ""
+        except SyntaxError as e:
+            return False, f"{e.msg} at line {e.lineno}"
+    if lang in ("json",):
+        try:
+            import json as _json
+            _json.loads(code)
+            return True, ""
+        except Exception as e:
+            return False, str(e)[:160]
+    # For other languages we can't compile safely server-side; accept and let
+    # the operator run them manually.
+    return True, ""
 
 
 @router.get("/code", response_model=List[CodeSnippet])

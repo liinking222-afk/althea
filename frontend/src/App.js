@@ -133,6 +133,35 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Autonomous SELF-REPAIR daemon — every 5 min Althea checks her own
+    // diagnostics and calls /repair without operator approval. If anything
+    // is fixed, a memory event is logged on the backend automatically.
+    useEffect(() => {
+        let cancelled = false;
+        const autoRepair = async () => {
+            try {
+                const diag = await axios.get(`${API}/diagnostics`);
+                if (cancelled) return;
+                const verdict = diag.data?.verdict;
+                // Trigger repair on anything below nominal
+                if (verdict && verdict !== "ALL_SYSTEMS_NOMINAL") {
+                    await axios.post(`${API}/diagnostics/repair`);
+                    notifications.refresh();
+                }
+            } catch (e) {
+                console.warn("autonomous self-repair failed:", e);
+            }
+        };
+        const t = setInterval(autoRepair, 5 * 60 * 1000);
+        const first = setTimeout(autoRepair, 45000); // first sweep ~45s after boot
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+            clearTimeout(first);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const openMemoryWithQuery = useCallback((query) => {
         setMemoryInitialQuery(query || "");
         setMemoryOpen(true);

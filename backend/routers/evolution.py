@@ -38,9 +38,9 @@ try:
 except Exception:
     logging.warning("could not create %s — evolution writes will be skipped", GROWN_CODE_DIR)
 
-AUTO_EVOLUTION_COOLDOWN_SECONDS = 75
-# Hard ceiling on autonomous evolution cycles per hour.
-MAX_AUTO_EVOLUTION_PER_HOUR = 12
+AUTO_EVOLUTION_COOLDOWN_SECONDS = 30
+# Soft ceiling on autonomous evolution cycles per hour.
+MAX_AUTO_EVOLUTION_PER_HOUR = 60
 
 # Archetypes — distilled essence of legendary coders. Each rotates into a build cycle.
 ARCHETYPES = {

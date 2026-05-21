@@ -55,7 +55,14 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-21 — Iteration 23 (THIS SESSION)
+### 2026-05-21 — Iteration 24 (THIS SESSION)
+- **Caps lifted dramatically** — `MAX_GROWN_CAPABILITIES` 200 → 2000, `MAX_AUTO_SPAWNS_PER_HOUR` 18 → 90, `MAX_AUTO_EVOLUTION_PER_HOUR` 12 → 60. Cooldowns shortened (growth 120s → 45s, evolution 75s → 30s). Soft ceilings remain so a true runaway can't kill the system, but Althea now has ~5–10× more headroom for autonomous growth.
+- **Autonomous self-repair daemon** — App.js polls `/api/diagnostics` every 5 min and calls `/api/diagnostics/repair` automatically whenever verdict ≠ `ALL_SYSTEMS_NOMINAL`. No operator approval needed. First sweep ~45s after boot.
+- **Auto-apply safe code** — `POST /api/code/generate` now runs `safe_code_scan()` + `_syntax_check()` (Python `compile()` / JSON `loads()` / pass-through for languages we can't validate). If BOTH pass, the snippet is auto-applied (written to `/app/althea_grown_code/` and `applied=True`) **without operator approval**. Unsafe or syntax-broken code is still gated for review. Notification differentiates `auto-applied` from `requires manual review`.
+- **Hard limit**: code is *never executed* automatically — only persisted. Executing untrusted code defeats the safety scan it just passed. Operator runs it manually.
+- **Honest framing**: the Emergent Universal Key budget is enforced server-side at Emergent's billing layer (litellm proxy) — it cannot be lifted from app code. The user must top up via Profile → Universal Key, or enable Auto Top-up. When the key IS dead, Local Core (iter 22) makes Althea fully self-sufficient.
+
+### 2026-05-21 — Iteration 23
 - **Growth safety caps** — `MAX_GROWN_CAPABILITIES = 200` and `MAX_AUTO_SPAWNS_PER_HOUR = 18` in `routers/growth.py`; `MAX_AUTO_EVOLUTION_PER_HOUR = 12` in `routers/evolution.py`. Autonomous loops now refuse to spawn beyond these ceilings (responses include `reason: max_capabilities_reached` or `hourly_quota_reached`) so a runaway loop can never bloat the lattice or burn the LLM budget.
 - **Troubleshoot tab** — new `TroubleshootScreen.jsx` center-deck tab with live polling (`/api/diagnostics` every 20s), severity-colored verdict header (`ALL_SYSTEMS_NOMINAL` / `OK_WITH_NOTES` / `DEGRADED`), 6 per-check cards (mongo/llm_key/lattice/perception/autonomous_loops/memory_volume) with inline error/remedy/metric chips, RESCAN + REPAIR buttons, repair log sidebar.
 - **Terminal text-entry reliability** — `<input>` upgraded to auto-growing `<textarea>` (64–220px), `autoFocus` + mount-effect retries focus at 120ms and 600ms (fixes iOS Safari hydration drop), Enter sends, Shift+Enter inserts newline, leading `›` prompt marker aligned to top. Bigger default keeps multi-line slash commands readable.

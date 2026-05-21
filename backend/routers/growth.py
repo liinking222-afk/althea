@@ -34,12 +34,12 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 router = APIRouter()
 
 # How often Althea may autonomously spawn a new capability (server-side gate).
-AUTO_GROWTH_COOLDOWN_SECONDS = 120
-# Hard ceiling on total grown capabilities. Beyond this, autonomous spawns are
-# refused so the lattice never bloats to a point where it harms the system.
-MAX_GROWN_CAPABILITIES = 200
-# Hard ceiling on autonomous spawns per hour (independent of the cooldown).
-MAX_AUTO_SPAWNS_PER_HOUR = 18
+AUTO_GROWTH_COOLDOWN_SECONDS = 45
+# Soft ceiling on total grown capabilities. Far higher than before; the
+# autonomous loop trusts itself to stop only when this is reached.
+MAX_GROWN_CAPABILITIES = 2000
+# Soft ceiling on autonomous spawns per hour.
+MAX_AUTO_SPAWNS_PER_HOUR = 90
 
 
 # ---------- helpers ----------
