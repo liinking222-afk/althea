@@ -17,7 +17,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 
-from core import db, EMERGENT_LLM_KEY
+from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
 from models import (
     CodeSnippet,
     CognitiveNode,
@@ -276,8 +276,13 @@ async def tick(req: EvolutionTickRequest):
             code, explanation = _extract_code(raw)
             if not code:
                 code = f"# [EVO {archetype}] {intent}\n# (no fenced block returned)"
-        except Exception:
-            logging.exception("evolution tick failed")
+        except Exception as exc:
+            if is_budget_exceeded(exc):
+                logging.warning(
+                    "evolution.tick: emergent llm key budget exceeded — emitting placeholder cycle"
+                )
+            else:
+                logging.exception("evolution tick failed")
             code = f"# [CORE-LATENCY cycle:{cycle_number}] {archetype} stalled.\n"
             delta = "Cycle stalled — cognition core unreachable."
     else:

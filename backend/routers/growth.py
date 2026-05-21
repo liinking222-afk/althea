@@ -17,7 +17,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 
-from core import db, EMERGENT_LLM_KEY
+from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
 from models import (
     CognitiveNode,
     GrowthExecuteRequest,
@@ -362,6 +362,11 @@ async def _invent_capability(
             trigger=trigger,
             activation=activation,
         )
-    except Exception:
-        logging.exception("capability invention failed")
+    except Exception as exc:
+        if is_budget_exceeded(exc):
+            logging.warning(
+                "growth.spawn: emergent llm key budget exceeded — returning fallback capability"
+            )
+        else:
+            logging.exception("capability invention failed")
         return fallback

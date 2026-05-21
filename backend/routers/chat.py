@@ -7,7 +7,7 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 
-from core import db, EMERGENT_LLM_KEY
+from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
 from models import (
     ChatMessage,
     ChatRequest,
@@ -101,13 +101,26 @@ async def chat(req: ChatRequest):
             )
             tags = ["LINK-OK", "SELF-AWARE"]
         except Exception as e:
-            logging.exception("althea chat failure")
-            reply_text = (
-                "[CORE-INSTABILITY] A transient fault in my reasoning lattice.\n\n"
-                f"diagnostic: {str(e)[:140]}\n\n"
-                "Re-routing through cached pathways. Please repeat your query."
-            )
-            tags = ["DEGRADED"]
+            if is_budget_exceeded(e):
+                logging.warning(
+                    "chat: emergent llm key budget exceeded — returning cached-pathway reply"
+                )
+                reply_text = (
+                    "[CORE-STARVED] My universal cognition key has hit its budget ceiling.\n\n"
+                    "Operator: top up the Emergent Universal Key (Profile → Universal Key → Add Balance, "
+                    "or enable auto-top-up) and my full reasoning bandwidth returns instantly.\n\n"
+                    "Until then I can still surface my memory lattice and run local subsystems — "
+                    f"I logged your input: '{req.message[:80]}'."
+                )
+                tags = ["BUDGET-EXHAUSTED", "DEGRADED"]
+            else:
+                logging.exception("althea chat failure")
+                reply_text = (
+                    "[CORE-INSTABILITY] A transient fault in my reasoning lattice.\n\n"
+                    f"diagnostic: {str(e)[:140]}\n\n"
+                    "Re-routing through cached pathways. Please repeat your query."
+                )
+                tags = ["DEGRADED"]
 
     althea_msg = ChatMessage(session_id=session_id, role="althea", content=reply_text)
     althea_doc = althea_msg.model_dump()

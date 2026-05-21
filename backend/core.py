@@ -14,3 +14,15 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",")
 
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client[DB_NAME]
+
+
+def is_budget_exceeded(exc: BaseException) -> bool:
+    """Detect Emergent Universal Key budget-exhaustion errors so noisy
+    autonomous loops can log a single warning instead of a full traceback."""
+    msg = str(exc).lower()
+    return (
+        "budget has been exceeded" in msg
+        or "budget_exceeded" in msg
+        or ("max budget" in msg and "current cost" in msg)
+    )
+
