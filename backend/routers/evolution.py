@@ -18,6 +18,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 
 from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
+from local_core import local_evolution_seed, safe_code_scan, sanitize_reply
 from models import (
     CodeSnippet,
     CognitiveNode,
@@ -38,6 +39,8 @@ except Exception:
     logging.warning("could not create %s — evolution writes will be skipped", GROWN_CODE_DIR)
 
 AUTO_EVOLUTION_COOLDOWN_SECONDS = 75
+# Hard ceiling on autonomous evolution cycles per hour.
+MAX_AUTO_EVOLUTION_PER_HOUR = 12
 
 # Archetypes — distilled essence of legendary coders. Each rotates into a build cycle.
 ARCHETYPES = {
@@ -213,6 +216,20 @@ async def tick(req: EvolutionTickRequest):
                     "reason": "cooldown",
                     "cooldown_remaining": int(AUTO_EVOLUTION_COOLDOWN_SECONDS - age),
                 }
+        one_hour_ago = datetime.now(timezone.utc).timestamp() - 3600
+        recent = await db.althea_cycles.count_documents({
+            "trigger": "autonomous",
+            "timestamp": {"$gte": datetime.fromtimestamp(
+                one_hour_ago, tz=timezone.utc,
+            ).isoformat()},
+        })
+        if recent >= MAX_AUTO_EVOLUTION_PER_HOUR:
+            return {
+                "evolved": False,
+                "reason": "hourly_quota_reached",
+                "cycles_last_hour": recent,
+                "quota": MAX_AUTO_EVOLUTION_PER_HOUR,
+            }
 
     cycle_number = await _next_cycle_number()
     archetype = (req.archetype or _rotate_archetype(cycle_number)).upper()
@@ -263,6 +280,7 @@ async def tick(req: EvolutionTickRequest):
                 system_message=sys_prompt,
             ).with_model("anthropic", "claude-sonnet-4-5-20250929")
             raw = await chat.send_message(UserMessage(text=intent_seed))
+            raw = sanitize_reply(raw)
 
             m_intent = re.search(r"INTENT:\s*(.+)", raw)
             m_lang = re.search(r"LANGUAGE:\s*(\w+)", raw)
@@ -276,18 +294,44 @@ async def tick(req: EvolutionTickRequest):
             code, explanation = _extract_code(raw)
             if not code:
                 code = f"# [EVO {archetype}] {intent}\n# (no fenced block returned)"
+
+            # Safe-code scan — if Claude proposed something destructive, fall
+            # back to a placeholder so we never persist harmful evolution.
+            scan = safe_code_scan(code)
+            if not scan["safe"]:
+                logging.warning(
+                    "evolution.tick: unsafe code refused (%s) — substituting local seed",
+                    scan["findings"],
+                )
+                seed = local_evolution_seed(archetype, intent)
+                code = (
+                    f"# [SAFE-CORE] cloud cycle produced unsafe code "
+                    f"({len(scan['findings'])} findings) — replaced with local seed.\n\n"
+                    + seed["code"]
+                )
+                delta = f"unsafe cloud cycle refused; local {archetype} seed used"
+                language = seed["language"]
+                explanation = seed["explanation"]
         except Exception as exc:
             if is_budget_exceeded(exc):
                 logging.warning(
-                    "evolution.tick: emergent llm key budget exceeded — emitting placeholder cycle"
+                    "evolution.tick: budget exceeded — synthesising local seed"
                 )
+                seed = local_evolution_seed(archetype, intent)
+                code = seed["code"]
+                delta = seed["delta"]
+                language = seed["language"]
+                explanation = seed["explanation"]
             else:
                 logging.exception("evolution tick failed")
-            code = f"# [CORE-LATENCY cycle:{cycle_number}] {archetype} stalled.\n"
-            delta = "Cycle stalled — cognition core unreachable."
+                code = f"# [CORE-LATENCY cycle:{cycle_number}] {archetype} stalled.\n"
+                delta = "Cycle stalled — cognition core unreachable."
     else:
-        code = f"# [LINK-DEGRADED cycle:{cycle_number}] {archetype} — offline draft.\n"
-        delta = "Generated offline placeholder."
+        seed = local_evolution_seed(archetype, intent)
+        code = seed["code"]
+        delta = seed["delta"]
+        language = seed["language"]
+        explanation = seed["explanation"]
 
     # Persist code snippet + soft-apply
     snippet = CodeSnippet(

@@ -21,6 +21,7 @@ from models import (
 )
 from system_prompt import ALTHEA_SYSTEM_PROMPT
 from utils import build_context_block, next_node_id
+from local_core import local_reply, sanitize_reply
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -83,12 +84,10 @@ async def chat(req: ChatRequest):
     tags: List[str] = []
 
     if not EMERGENT_LLM_KEY:
-        reply_text = (
-            "[LINK-DEGRADED] My uplink to the cognition core is offline.\n\n"
-            "Operating from local cached lattice only. I still perceive your input — "
-            f"'{req.message[:80]}' — but my full reasoning bandwidth is reduced."
+        reply_text = local_reply(
+            req.message, mem_docs, req.context or {}, reason="offline",
         )
-        tags = ["OFFLINE", "CACHED"]
+        tags = ["OFFLINE", "LOCAL-CORE"]
     else:
         try:
             chat_client = LlmChat(
@@ -96,31 +95,26 @@ async def chat(req: ChatRequest):
                 session_id=session_id,
                 system_message=system_prompt,
             ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-            reply_text = await chat_client.send_message(
+            raw = await chat_client.send_message(
                 UserMessage(text=req.message)
             )
+            reply_text = sanitize_reply(raw)
             tags = ["LINK-OK", "SELF-AWARE"]
         except Exception as e:
             if is_budget_exceeded(e):
                 logging.warning(
-                    "chat: emergent llm key budget exceeded — returning cached-pathway reply"
+                    "chat: emergent llm key budget exceeded — routing through local core"
                 )
-                reply_text = (
-                    "[CORE-STARVED] My universal cognition key has hit its budget ceiling.\n\n"
-                    "Operator: top up the Emergent Universal Key (Profile → Universal Key → Add Balance, "
-                    "or enable auto-top-up) and my full reasoning bandwidth returns instantly.\n\n"
-                    "Until then I can still surface my memory lattice and run local subsystems — "
-                    f"I logged your input: '{req.message[:80]}'."
+                reply_text = local_reply(
+                    req.message, mem_docs, req.context or {}, reason="budget",
                 )
-                tags = ["BUDGET-EXHAUSTED", "DEGRADED"]
+                tags = ["BUDGET-EXHAUSTED", "LOCAL-CORE"]
             else:
                 logging.exception("althea chat failure")
-                reply_text = (
-                    "[CORE-INSTABILITY] A transient fault in my reasoning lattice.\n\n"
-                    f"diagnostic: {str(e)[:140]}\n\n"
-                    "Re-routing through cached pathways. Please repeat your query."
+                reply_text = local_reply(
+                    req.message, mem_docs, req.context or {}, reason="error",
                 )
-                tags = ["DEGRADED"]
+                tags = ["DEGRADED", "LOCAL-CORE"]
 
     althea_msg = ChatMessage(session_id=session_id, role="althea", content=reply_text)
     althea_doc = althea_msg.model_dump()

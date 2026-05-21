@@ -48,7 +48,10 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
     const onClickRef = useRef(onLatticeNodeClick);
     const [latticeCount, setLatticeCount] = React.useState(0);
     const [quantumCount, setQuantumCount] = React.useState(0);
-    const zoomRef = useRef({ z: 14, min: 4, max: 28, target: 14 });
+    // Camera-distance range: stays far enough that the entire lattice fits
+    // even at extreme growth. `max` is intentionally huge so the operator
+    // can always pull back regardless of node count.
+    const zoomRef = useRef({ z: 14, min: 2, max: 5000, target: 14 });
     const [zoomUi, setZoomUi] = React.useState(14);
 
     useEffect(() => {
@@ -69,7 +72,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             50,
             width / height,
             0.1,
-            100,
+            10000,
         );
         camera.position.set(0, 0, 14);
 
@@ -433,26 +436,42 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         window.addEventListener("mouseup", onUp);
         window.addEventListener("mousemove", onMove);
 
-        // Wheel zoom
+        // Wheel zoom — step is proportional to current distance so it feels
+        // natural at any zoom level (close-in fine control, far-out big leaps).
         const onWheel = (e) => {
             e.preventDefault();
-            const delta = e.deltaY * 0.01;
-            zoomRef.current.target = Math.max(
-                zoomRef.current.min,
-                Math.min(zoomRef.current.max, zoomRef.current.target + delta),
-            );
+            const zr = zoomRef.current;
+            const step = Math.max(0.5, zr.target * 0.08);
+            const delta = (e.deltaY / 100) * step;
+            zr.target = Math.max(zr.min, Math.min(zr.max, zr.target + delta));
         };
         renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
-        // Imperative zoom hooks for the +/- buttons
-        window.__althea_zoom = (delta) => {
-            zoomRef.current.target = Math.max(
-                zoomRef.current.min,
-                Math.min(zoomRef.current.max, zoomRef.current.target + delta),
-            );
+        // Imperative zoom hooks for the +/- buttons. dir is +1 (out) or -1 (in).
+        window.__althea_zoom = (dir) => {
+            const zr = zoomRef.current;
+            const step = Math.max(1, zr.target * 0.18);
+            zr.target = Math.max(zr.min, Math.min(zr.max, zr.target + dir * step));
         };
         window.__althea_zoomReset = () => {
             zoomRef.current.target = 14;
+        };
+        // Fit-all: pull back enough that the entire bounding sphere of the
+        // lattice fits inside the camera frustum, regardless of node count.
+        window.__althea_zoomFit = () => {
+            const box = new THREE.Box3().setFromObject(group);
+            if (box.isEmpty()) {
+                zoomRef.current.target = 14;
+                return;
+            }
+            const sphere = new THREE.Sphere();
+            box.getBoundingSphere(sphere);
+            const fov = (camera.fov * Math.PI) / 180;
+            const fit = sphere.radius / Math.sin(fov / 2);
+            zoomRef.current.target = Math.max(
+                zoomRef.current.min,
+                Math.min(zoomRef.current.max, fit * 1.25 + 2),
+            );
         };
 
         // Raycaster for clicking the cyan lattice satellites
@@ -580,6 +599,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             clearInterval(quantumTick);
             delete window.__althea_zoom;
             delete window.__althea_zoomReset;
+            delete window.__althea_zoomFit;
             renderer.dispose();
             if (mount.contains(renderer.domElement)) {
                 mount.removeChild(renderer.domElement);
@@ -690,7 +710,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     {/* Zoom controls */}
                     <div className="absolute bottom-4 right-4 flex flex-col gap-1 pointer-events-auto">
                         <button
-                            onClick={() => window.__althea_zoom?.(-2)}
+                            onClick={() => window.__althea_zoom?.(-1)}
                             data-testid="neural-zoom-in"
                             title="zoom in (or scroll wheel)"
                             className="w-8 h-8 border border-[#CCFF00]/40 text-[#CCFF00] hover:bg-[#CCFF00]/10 heading text-lg leading-none"
@@ -698,17 +718,25 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                             +
                         </button>
                         <button
+                            onClick={() => window.__althea_zoomFit?.()}
+                            data-testid="neural-zoom-fit"
+                            title="fit entire lattice into view"
+                            className="w-8 h-6 border border-[#CCFF00]/40 text-[#CCFF00] hover:bg-[#CCFF00]/10 heading text-[9px]"
+                        >
+                            FIT
+                        </button>
+                        <button
                             onClick={() => window.__althea_zoomReset?.()}
                             data-testid="neural-zoom-reset"
-                            title="reset zoom"
+                            title="reset zoom to default"
                             className="w-8 h-6 border border-white/15 text-[#888] hover:text-[#CCFF00] hover:border-[#CCFF00]/40 heading text-[9px]"
                         >
                             ⌂
                         </button>
                         <button
-                            onClick={() => window.__althea_zoom?.(2)}
+                            onClick={() => window.__althea_zoom?.(1)}
                             data-testid="neural-zoom-out"
-                            title="zoom out"
+                            title="zoom out (unbounded — survives any growth)"
                             className="w-8 h-8 border border-[#CCFF00]/40 text-[#CCFF00] hover:bg-[#CCFF00]/10 heading text-lg leading-none"
                         >
                             −

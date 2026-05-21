@@ -355,6 +355,11 @@ function App() {
         setSessionId(id);
     }, [sessionId]);
 
+    // On mobile, only one panel is shown at a time. Default to the center
+    // deck so the operator sees the live lattice on first boot. The mobile
+    // switcher at the bottom lets them flip to Terminal or Telemetry.
+    const [mobilePanel, setMobilePanel] = useState("center");
+
     return (
         <div
             className="althea-app flex flex-col"
@@ -382,7 +387,11 @@ function App() {
                 }
             />
             <main className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3 px-3 pb-3 min-h-0">
-                <div className="md:col-span-3 min-h-0">
+                <div
+                    className={`md:col-span-3 min-h-0 ${
+                        mobilePanel === "terminal" ? "block" : "hidden md:block"
+                    }`}
+                >
                     <ChatConsole
                         sessionId={sessionId}
                         online={online}
@@ -398,7 +407,11 @@ function App() {
                         onOpenNotifications={() => setNotifOpen(true)}
                     />
                 </div>
-                <div className="md:col-span-6 min-h-0">
+                <div
+                    className={`md:col-span-6 min-h-0 ${
+                        mobilePanel === "center" ? "block" : "hidden md:block"
+                    }`}
+                >
                     <CenterDeck
                         tab={centerTab}
                         setTab={setCenterTab}
@@ -414,7 +427,11 @@ function App() {
                         onGrowthExecuted={handleGrowthExecuted}
                     />
                 </div>
-                <div className="md:col-span-3 min-h-0">
+                <div
+                    className={`md:col-span-3 min-h-0 ${
+                        mobilePanel === "telemetry" ? "block" : "hidden md:block"
+                    }`}
+                >
                     <TelemetryPanel
                         online={online}
                         geo={geo}
@@ -423,6 +440,30 @@ function App() {
                     />
                 </div>
             </main>
+            {/* Mobile panel switcher — only visible on screens < md */}
+            <nav
+                className="md:hidden flex items-stretch border-t border-white/10 bg-[#0a0a0a]"
+                data-testid="mobile-panel-switcher"
+            >
+                {[
+                    { id: "terminal", label: "terminal" },
+                    { id: "center", label: "deck" },
+                    { id: "telemetry", label: "telemetry" },
+                ].map((p) => (
+                    <button
+                        key={p.id}
+                        onClick={() => setMobilePanel(p.id)}
+                        data-testid={`mobile-panel-${p.id}`}
+                        className={`flex-1 py-3 heading text-[11px] uppercase tracking-widest min-h-[48px] ${
+                            mobilePanel === p.id
+                                ? "text-[#CCFF00] border-t-2 border-[#CCFF00] bg-[#CCFF00]/5"
+                                : "text-[#888] hover:text-white border-t-2 border-transparent"
+                        }`}
+                    >
+                        {p.label}
+                    </button>
+                ))}
+            </nav>
             <CommandBar
                 online={online}
                 introspection={introspection}

@@ -1,6 +1,18 @@
 /* App-scoped styles for Althea */
 .althea-app {
     height: 100vh;
+    /* Use small-viewport height on mobile so the iOS Safari URL bar doesn't
+       crop the bottom nav. dvh is dynamic viewport height. */
+    height: 100dvh;
     width: 100vw;
+    width: 100dvw;
     overflow: hidden;
 }
+
+/* Allow taller terminal on mobile while keeping center deck visible. */
+@media (max-width: 767px) {
+    .althea-app main {
+        min-height: 0;
+    }
+}
+

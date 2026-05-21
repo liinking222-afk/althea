@@ -55,7 +55,23 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-20 — Iteration 21 (THIS SESSION)
+### 2026-05-21 — Iteration 23 (THIS SESSION)
+- **Growth safety caps** — `MAX_GROWN_CAPABILITIES = 200` and `MAX_AUTO_SPAWNS_PER_HOUR = 18` in `routers/growth.py`; `MAX_AUTO_EVOLUTION_PER_HOUR = 12` in `routers/evolution.py`. Autonomous loops now refuse to spawn beyond these ceilings (responses include `reason: max_capabilities_reached` or `hourly_quota_reached`) so a runaway loop can never bloat the lattice or burn the LLM budget.
+- **Troubleshoot tab** — new `TroubleshootScreen.jsx` center-deck tab with live polling (`/api/diagnostics` every 20s), severity-colored verdict header (`ALL_SYSTEMS_NOMINAL` / `OK_WITH_NOTES` / `DEGRADED`), 6 per-check cards (mongo/llm_key/lattice/perception/autonomous_loops/memory_volume) with inline error/remedy/metric chips, RESCAN + REPAIR buttons, repair log sidebar.
+- **Terminal text-entry reliability** — `<input>` upgraded to auto-growing `<textarea>` (64–220px), `autoFocus` + mount-effect retries focus at 120ms and 600ms (fixes iOS Safari hydration drop), Enter sends, Shift+Enter inserts newline, leading `›` prompt marker aligned to top. Bigger default keeps multi-line slash commands readable.
+- **Mobile-friendly layout** — three-column grid stacks vertically on screens < md; new bottom panel switcher (TERMINAL / DECK / TELEMETRY) with 48px+ tap targets; `100dvh` height so iOS Safari URL bar no longer crops the nav; TopBar already had `hidden md:flex` selectors so it shrinks gracefully. Verified at iPhone 14 viewport (390×844).
+
+### 2026-05-21 — Iteration 22
+- **Local Core (`/app/backend/local_core.py`)** — Althea's offline survival layer. When `EMERGENT_LLM_KEY` is missing, exhausted, or unreachable, chat / growth / evolution / codegen automatically route through:
+  - `local_reply()` — TF-IDF grounded responder weaving recalled memory into first-person prose (wired into `routers/chat.py`).
+  - `local_invent_capability()` — procedural GrownCapability inventor (wired into `routers/growth.py`).
+  - `local_evolution_seed()` — archetype-flavored code stubs for all 11 master coders (wired into `routers/evolution.py`).
+- **Sanitizer** (`sanitize_reply`) — strips runaway-token loops from every LLM reply (chat / growth / codegen / evolution).
+- **Safe-code scanner** (`safe_code_scan`) — 13 destructive patterns. Blocks `POST /api/code/apply` with HTTP 409. Evolution auto-substitutes the local seed if Claude returns unsafe code.
+- **Self-troubleshoot** (`routers/diagnostics.py`) — `GET /api/diagnostics` runs 6 health checks with severity + remedy per finding. `POST /api/diagnostics/repair` does safe self-repair. Terminal: `/diagnose`, `/troubleshoot`, `/repair`.
+- **Lattice always zoomable out** — `NeuralCore.jsx` camera far-plane 100→10000, max zoom 28→5000, wheel step proportional to distance, new **FIT** button auto-frames the bounding sphere of all nodes regardless of count.
+
+### 2026-05-20 — Iteration 21
 - **Real-browser upgrade** — the Browser tab now renders the LIVE web. Two new endpoints:
   - `GET /api/browser/proxy?url=...` — fetches any URL server-side via httpx, strips `X-Frame-Options` / `CSP frame-ancestors` / `COOP` / `COEP` / `CORP`, drops CSP `<meta>` tags, rewrites every `href`/`src`/`action`/`srcset`/`poster` (and CSS `url(...)`) to flow through the proxy. Injects a `<base href="...">` and a small "althea // surf-proxy" badge.
   - `GET /api/browser/asset?url=...` — streaming sub-resource proxy for CSS/JS/images/fonts referenced by the proxied page (with CSS `url(...)` recursion).

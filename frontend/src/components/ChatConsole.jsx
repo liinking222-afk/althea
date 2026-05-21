@@ -56,6 +56,24 @@ const ChatConsole = ({
         localStorage.setItem("althea_tts", speakOn ? "1" : "0");
     }, [speakOn]);
 
+    // Ensure the input is always focused on first paint and after recovery.
+    // Some browsers (mobile Safari) drop focus during hydration — retry.
+    useEffect(() => {
+        const tryFocus = () => {
+            const el = inputRef.current;
+            if (el && document.activeElement !== el) {
+                el.focus({ preventScroll: true });
+            }
+        };
+        tryFocus();
+        const t1 = setTimeout(tryFocus, 120);
+        const t2 = setTimeout(tryFocus, 600);
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+        };
+    }, []);
+
     useEffect(() => {
         localStorage.setItem(
             "althea_cmd_history",
@@ -238,6 +256,29 @@ const ChatConsole = ({
             } else if (cmd === "/clear") {
                 setMessages([]);
                 pushSystem("[SYS] scrollback purged. memory + lattice intact.", ["SYS"]);
+            } else if (cmd === "/diagnose" || cmd === "/troubleshoot") {
+                const res = await axios.get(`${API}/diagnostics`);
+                const d = res.data || {};
+                const lines = [`[DIAGNOSTICS] verdict=${d.verdict} severity=${d.severity}`];
+                (d.checks || []).forEach((c) => {
+                    const tag = c.ok ? "OK " : "FAIL";
+                    const head = `  [${tag}] ${c.name}`;
+                    lines.push(head);
+                    if (c.error) lines.push(`        error: ${c.error}`);
+                    if (c.warn) lines.push(`        warn:  ${c.warn}`);
+                    if (c.remedy) lines.push(`        fix:   ${c.remedy}`);
+                });
+                if (d.failure_count + d.warning_count === 0) {
+                    lines.push("  all systems nominal.");
+                }
+                pushSystem(lines.join("\n"), ["DIAGNOSE"]);
+            } else if (cmd === "/repair") {
+                const res = await axios.post(`${API}/diagnostics/repair`);
+                const actions = res.data?.actions || [];
+                pushSystem(
+                    `[REPAIR] ${actions.length ? actions.join("; ") : "no repair actions required."}`,
+                    ["DIAGNOSE"],
+                );
             } else if (cmd === "/status") {
                 const [g, lat, ths] = await Promise.all([
                     axios.get(`${API}/growth/stats`),
@@ -1144,30 +1185,41 @@ const ChatConsole = ({
                     e.preventDefault();
                     send();
                 }}
-                className="border-t border-white/10 p-3 flex items-center gap-2 relative"
+                className="border-t border-white/10 p-3 flex items-start gap-2 relative"
             >
                 <span
-                    className="text-[#CCFF00] heading text-sm"
+                    className="text-[#CCFF00] heading text-sm pt-2"
                     data-testid="prompt-marker"
                 >
                     ›
                 </span>
                 <div className="flex-1 relative">
-                    <input
+                    <textarea
                         ref={inputRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={onKeyDown}
-                        placeholder="speak to althea. try /help · /grow · /status · ↑↓ history · Tab complete"
-                        className="w-full bg-transparent outline-none text-sm font-mono text-white placeholder:text-[#444] relative z-10"
+                        onKeyDown={(e) => {
+                            // Enter sends, Shift+Enter inserts newline
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                send();
+                                return;
+                            }
+                            onKeyDown(e);
+                        }}
+                        placeholder="speak to althea. try /help · /diagnose · /grow · ↑↓ history · Tab complete · Shift+Enter newline"
+                        rows={2}
+                        className="w-full bg-transparent outline-none text-sm font-mono text-white placeholder:text-[#444] relative z-10 resize-none leading-relaxed py-1"
+                        style={{ minHeight: 64, maxHeight: 220 }}
                         data-testid="chat-input"
                         disabled={sending}
                         spellCheck={false}
                         autoComplete="off"
+                        autoFocus
                     />
                     {suggestion && (
                         <div
-                            className="absolute inset-0 pointer-events-none text-sm font-mono z-0"
+                            className="absolute inset-0 pointer-events-none text-sm font-mono z-0 py-1 leading-relaxed whitespace-pre-wrap break-words"
                             data-testid="autocomplete-ghost"
                         >
                             <span className="invisible">{input}</span>

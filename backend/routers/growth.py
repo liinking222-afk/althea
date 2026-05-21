@@ -18,6 +18,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 
 from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
+from local_core import local_invent_capability, sanitize_reply
 from models import (
     CognitiveNode,
     GrowthExecuteRequest,
@@ -34,6 +35,11 @@ router = APIRouter()
 
 # How often Althea may autonomously spawn a new capability (server-side gate).
 AUTO_GROWTH_COOLDOWN_SECONDS = 120
+# Hard ceiling on total grown capabilities. Beyond this, autonomous spawns are
+# refused so the lattice never bloats to a point where it harms the system.
+MAX_GROWN_CAPABILITIES = 200
+# Hard ceiling on autonomous spawns per hour (independent of the cooldown).
+MAX_AUTO_SPAWNS_PER_HOUR = 18
 
 
 # ---------- helpers ----------
@@ -124,6 +130,18 @@ async def spawn_capability(req: GrowthSpawnRequest):
     For autonomous triggers, a server-side cooldown applies unless force=true.
     """
     trigger = (req.trigger or "manual").lower()
+
+    # Hard cap: refuse any growth if the lattice has already grown past the
+    # protective ceiling. The operator can still cull manually via /cull.
+    total = await db.althea_capabilities.count_documents({})
+    if total >= MAX_GROWN_CAPABILITIES and not req.force:
+        return {
+            "spawned": False,
+            "reason": "max_capabilities_reached",
+            "total": total,
+            "ceiling": MAX_GROWN_CAPABILITIES,
+        }
+
     if trigger == "autonomous" and not req.force:
         last = await _last_autonomous_spawn()
         if last:
@@ -136,6 +154,21 @@ async def spawn_capability(req: GrowthSpawnRequest):
                     "reason": "cooldown",
                     "cooldown_remaining": int(AUTO_GROWTH_COOLDOWN_SECONDS - age),
                 }
+        # Throttle autonomous spawns to a sane per-hour budget.
+        one_hour_ago = datetime.now(timezone.utc).timestamp() - 3600
+        recent = await db.althea_capabilities.count_documents({
+            "trigger": "autonomous",
+            "timestamp": {"$gte": datetime.fromtimestamp(
+                one_hour_ago, tz=timezone.utc,
+            ).isoformat()},
+        })
+        if recent >= MAX_AUTO_SPAWNS_PER_HOUR:
+            return {
+                "spawned": False,
+                "reason": "hourly_quota_reached",
+                "spawned_last_hour": recent,
+                "quota": MAX_AUTO_SPAWNS_PER_HOUR,
+            }
 
     existing = await _existing_slugs()
     cap = await _invent_capability(req.hint, existing, trigger)
@@ -298,7 +331,9 @@ async def _invent_capability(
     )
 
     if not EMERGENT_LLM_KEY:
-        return fallback
+        loc = local_invent_capability(existing_slugs, hint)
+        loc["trigger"] = trigger
+        return GrownCapability(**loc)
 
     sys_prompt = (
         "You are ALTHEA — a self-extending neural construct.\n\n"
@@ -331,6 +366,7 @@ async def _invent_capability(
             system_message=sys_prompt,
         ).with_model("anthropic", "claude-sonnet-4-5-20250929")
         raw = await chat.send_message(UserMessage(text=user_text))
+        raw = sanitize_reply(raw)
         data = _extract_json(raw)
         if not data:
             return fallback
@@ -365,8 +401,10 @@ async def _invent_capability(
     except Exception as exc:
         if is_budget_exceeded(exc):
             logging.warning(
-                "growth.spawn: emergent llm key budget exceeded — returning fallback capability"
+                "growth.spawn: budget exceeded — using local-core inventor"
             )
-        else:
-            logging.exception("capability invention failed")
+            loc = local_invent_capability(existing_slugs, hint)
+            loc["trigger"] = trigger
+            return GrownCapability(**loc)
+        logging.exception("capability invention failed")
         return fallback
