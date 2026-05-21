@@ -1185,15 +1185,25 @@ const ChatConsole = ({
                     e.preventDefault();
                     send();
                 }}
-                className="border-t border-white/10 p-3 flex items-start gap-2 relative"
+                onClick={(e) => {
+                    // Click anywhere on the form footer focuses the textarea
+                    // so the operator never has to hunt for the cursor.
+                    if (e.target === e.currentTarget) {
+                        inputRef.current?.focus();
+                    }
+                }}
+                className="border-t border-white/10 p-3 md:p-4 flex items-start gap-2 relative cursor-text"
             >
                 <span
-                    className="text-[#CCFF00] heading text-sm pt-2"
+                    className="text-[#CCFF00] heading text-sm pt-2 select-none"
                     data-testid="prompt-marker"
                 >
                     ›
                 </span>
-                <div className="flex-1 relative">
+                <div
+                    className="flex-1 relative"
+                    onClick={() => inputRef.current?.focus()}
+                >
                     <textarea
                         ref={inputRef}
                         value={input}
@@ -1208,9 +1218,12 @@ const ChatConsole = ({
                             onKeyDown(e);
                         }}
                         placeholder="speak to althea. try /help · /diagnose · /grow · ↑↓ history · Tab complete · Shift+Enter newline"
-                        rows={2}
-                        className="w-full bg-transparent outline-none text-sm font-mono text-white placeholder:text-[#444] relative z-10 resize-none leading-relaxed py-1"
-                        style={{ minHeight: 64, maxHeight: 220 }}
+                        rows={3}
+                        className="w-full bg-transparent outline-none text-sm md:text-[15px] font-mono text-white placeholder:text-[#444] relative z-10 resize-none leading-relaxed py-1"
+                        style={{
+                            minHeight: "clamp(72px, 14vh, 140px)",
+                            maxHeight: "min(320px, 30vh)",
+                        }}
                         data-testid="chat-input"
                         disabled={sending}
                         spellCheck={false}
@@ -1219,7 +1232,7 @@ const ChatConsole = ({
                     />
                     {suggestion && (
                         <div
-                            className="absolute inset-0 pointer-events-none text-sm font-mono z-0 py-1 leading-relaxed whitespace-pre-wrap break-words"
+                            className="absolute inset-0 pointer-events-none text-sm md:text-[15px] font-mono z-0 py-1 leading-relaxed whitespace-pre-wrap break-words"
                             data-testid="autocomplete-ghost"
                         >
                             <span className="invisible">{input}</span>
@@ -1229,42 +1242,44 @@ const ChatConsole = ({
                         </div>
                     )}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    data-testid="chat-attach-btn"
-                    title="attach a file (≤2MB)"
-                    className="heading text-[10px] uppercase tracking-widest px-2 py-1 border border-white/15 hover:border-[#FFD400]/60 hover:text-[#FFD400]"
-                >
-                    📎
-                </button>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={onFileChange}
-                    className="hidden"
-                    data-testid="chat-file-input"
-                />
-                <button
-                    type="button"
-                    onClick={toggleVoice}
-                    data-testid="voice-input-btn"
-                    className={`heading text-[10px] uppercase tracking-widest px-2 py-1 border ${
-                        listening
-                            ? "border-[#FF2A2A] text-[#FF2A2A]"
-                            : "border-white/15 hover:border-[#CCFF00]/60 hover:text-[#CCFF00]"
-                    }`}
-                >
-                    {listening ? "stop" : "voice"}
-                </button>
-                <button
-                    type="submit"
-                    disabled={sending || !input.trim()}
-                    data-testid="chat-send-btn"
-                    className="heading text-[10px] uppercase tracking-widest px-3 py-1 border border-[#CCFF00]/60 text-[#CCFF00] hover:bg-[#CCFF00]/10 disabled:opacity-40"
-                >
-                    transmit
-                </button>
+                <div className="flex flex-col gap-1.5 self-stretch">
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        data-testid="chat-attach-btn"
+                        title="attach a file (≤2MB)"
+                        className="heading text-[10px] uppercase tracking-widest px-2 py-1.5 border border-white/15 hover:border-[#FFD400]/60 hover:text-[#FFD400] min-h-[36px] min-w-[42px]"
+                    >
+                        📎
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        onChange={onFileChange}
+                        className="hidden"
+                        data-testid="chat-file-input"
+                    />
+                    <button
+                        type="button"
+                        onClick={toggleVoice}
+                        data-testid="voice-input-btn"
+                        className={`heading text-[10px] uppercase tracking-widest px-2 py-1.5 border min-h-[36px] ${
+                            listening
+                                ? "border-[#FF2A2A] text-[#FF2A2A]"
+                                : "border-white/15 hover:border-[#CCFF00]/60 hover:text-[#CCFF00]"
+                        }`}
+                    >
+                        {listening ? "stop" : "voice"}
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={sending || !input.trim()}
+                        data-testid="chat-send-btn"
+                        className="heading text-[11px] uppercase tracking-widest px-3 py-2 border border-[#CCFF00]/60 text-[#CCFF00] hover:bg-[#CCFF00]/10 disabled:opacity-40 min-h-[40px] font-semibold"
+                    >
+                        transmit
+                    </button>
+                </div>
             </form>
         </section>
     );
