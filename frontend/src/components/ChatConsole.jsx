@@ -298,6 +298,16 @@ const ChatConsole = ({
                         ["MEMORY"],
                     );
                 }
+            } else if (cmd === "/imagine" || cmd === "/draw" || cmd === "/visualize") {
+                const prompt = rest.trim();
+                if (!prompt) {
+                    pushSystem("[IMAGE] usage: /imagine <prompt>", ["IMAGE"]);
+                } else {
+                    pushSystem(
+                        `[IMAGE] requesting gemini render of "${prompt.slice(0, 80)}"…\n\n[IMAGE: ${prompt}]`,
+                        ["IMAGE"],
+                    );
+                }
             } else if (cmd === "/status") {
                 const [g, lat, ths] = await Promise.all([
                     axios.get(`${API}/growth/stats`),

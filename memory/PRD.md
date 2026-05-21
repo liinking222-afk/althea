@@ -55,6 +55,13 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
+### 2026-05-21 — Iteration 26 (THIS SESSION)
+- **LaTeX math in terminal** — KaTeX added (`yarn add katex`, CSS imported globally). `MessageRow.jsx` tokenizes every reply and renders `$inline$` + `$$block$$` math, fenced code blocks, **bold**, and inline images. Unlimited message length verified end-to-end.
+- **Image generation** — new `POST /api/images/generate` using Gemini Nano Banana (`gemini-3.1-flash-image-preview`) via emergentintegrations. Returns base64 `data_url`, logs `[IMAGINED]` memory event, stored in `althea_images` collection. Budget-exceeded → HTTP 402.
+- **Auto-image directive** — Althea's system prompt teaches her to write `[IMAGE: vivid prompt]` when a diagram aids explanation. MessageRow intercepts the directive, calls Gemini, caches via sessionStorage, renders inline.
+- **`/imagine <prompt>`** terminal slash command (aliases `/draw`, `/visualize`).
+- Verified end-to-end: "Show me Maxwell's equations and draw a magnetic field around a wire" → 4 KaTeX math blocks + 1 inline Gemini image + paragraph-length physics explanation.
+
 ### 2026-05-21 — Iteration 25 (THIS SESSION)
 - **Memory effectively unlimited**:
   - `RECALL_CORPUS_MAX` 2000 → 250,000 (the full lattice in any realistic scenario)

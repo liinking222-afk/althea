@@ -20,6 +20,7 @@ from routers import (  # noqa: E402
     evolution,
     files,
     growth,
+    images,
     lattice,
     memory,
     notifications,
@@ -53,6 +54,7 @@ api_router.include_router(codegen.router)
 api_router.include_router(desktop.router)
 api_router.include_router(evolution.router)
 api_router.include_router(diagnostics.router)
+api_router.include_router(images.router)
 
 app.include_router(api_router)
 

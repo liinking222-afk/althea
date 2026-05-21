@@ -3,7 +3,7 @@
 
 // Static slash commands. Grown capability slugs are merged at runtime.
 export const STATIC_SLASH = [
-    "/help", "/banner", "/clear", "/status", "/diagnose", "/troubleshoot", "/repair", "/consolidate", "/capabilities", "/system",
+    "/help", "/banner", "/clear", "/status", "/diagnose", "/troubleshoot", "/repair", "/consolidate", "/imagine", "/draw", "/visualize", "/capabilities", "/system",
     "/memory", "/remember", "/forget", "/clear-memory",
     "/recall", "/concepts",
     "/watch", "/stop-watch", "/suggest",
@@ -100,6 +100,7 @@ export const HELP_TEXT =
     "/diagnose          run self-troubleshoot battery\n" +
     "/repair            apply safe self-repair actions\n" +
     "/consolidate [n]   fold old memories into summaries (keep n recent)\n" +
+    "/imagine <prompt>  ask gemini to draw an image inline (math, physics, diagrams)\n" +
     "/clear             wipe terminal scrollback\n" +
     "/capabilities      list all subsystems\n" +
     "/zoom in|out|reset zoom neural lattice\n" +
