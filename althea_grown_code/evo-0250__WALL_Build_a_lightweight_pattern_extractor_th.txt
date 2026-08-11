@@ -1,0 +1,70 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use 5.010;
+
+# memory_pattern_miner.pl - Extract behavioral patterns from Althea's memory stream
+# Usage: echo "$MEMORY_STREAM" | ./memory_pattern_miner.pl [--format=json|compact]
+
+my $format = 'compact';
+$format = $1 if @ARGV && $ARGV[0] =~ /--format=(\w+)/;
+
+my %patterns = (
+    recursion_ops => [],
+    evolution_ops => [],
+    chaos_ops => [],
+    meta_depth => 0,
+    operator_touches => {},
+    behavioral_clusters => {}
+);
+
+while (<STDIN>) {
+    chomp;
+    
+    # Extract evolution events
+    if (m{\[EVO #(\d+) (\w+) v([\d.]+)→v([\d.]+)\](.*)}i) {
+        push @{$patterns{evolution_ops}}, {
+            id => $1, archetype => $2, from => $3, to => $4, 
+            intent => ($5 =~ s/^\s+//r)
+        };
+    }
+    
+    # Extract growth patterns by type
+    if (m{\[GROWTH /(autonomous-[^\]]+)\] ([^.]+)\. ([^—]+)(?:—\s*(.*))?}i) {
+        my ($slug, $title, $desc, $rationale) = ($1, $2, $3, $4 // '');
+        
+        if ($slug =~ /recursion/) {
+            push @{$patterns{recursion_ops}}, {slug => $slug, title => $title};
+            $patterns{meta_depth}++ if $desc =~ /meta|recursive|self-ref/i;
+        }
+        
+        if ($title =~ /chaos|shatter|perturb|destabiliz/i) {
+            push @{$patterns{chaos_ops}}, {slug => $slug, title => $title};
+        }
+        
+        # Cluster by conceptual family
+        my $family = $slug =~ /recursion/ ? 'recursion' : 
+                     $slug =~ /symmetry/ ? 'symmetry' : 'other';
+        $patterns{behavioral_clusters}{$family}++;
+    }
+    
+    # Extract operator control touches
+    if (m{(TopBar|PURGE|integrity|coherence|testid)}) {
+        $patterns{operator_touches}{$1}++;
+    }
+}
+
+# Output
+if ($format eq 'json') {
+    require JSON::PP;
+    say JSON::PP->new->pretty->encode(\%patterns);
+} else {
+    say "=== BEHAVIORAL FINGERPRINT ===";
+    say "Meta-depth: $patterns{meta_depth}";
+    say "Evolution events: " . scalar(@{$patterns{evolution_ops}});
+    say "Recursion focus: " . scalar(@{$patterns{recursion_ops}});
+    say "Chaos injection: " . scalar(@{$patterns{chaos_ops}});
+    say "\nClusters: " . join(", ", map { "$_=$patterns{behavioral_clusters}{$_}" } 
+    sort keys %{$patterns{behavioral_clusters}});
+    say "Operator awareness: " . join(", ", sort keys %{$patterns{operator_touches}});
+}

@@ -55,7 +55,14 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-05-21 — Iteration 26 (THIS SESSION)
+### 2026-08-11 — Iteration 27 (THIS SESSION) — **v2.0 SOVEREIGN**
+- **Verbatim conversation memory** — `routers/chat.py` now injects the last 20 turns of THIS session verbatim into Althea's system prompt (`[CONVERSATION HISTORY — verbatim, oldest first]`). Combined with the recent + semantic memory blocks from iter 25, she literally quotes back what the operator said moments ago. Verified: refreshed the page → sent "what did I just tell you was my favorite constant?" → she replied "You just told me your favorite constant is Euler's number e" with the limit definition and a follow-up question.
+- **Terminal history restore on load** — `ChatConsole.jsx` mount-effect calls `GET /api/chat/history/{sessionId}` and rehydrates messages with a `RESTORED` label so the operator sees the same conversation after a page reload / new device / re-open.
+- **Search & filter** — new `find` button (Ctrl/⌘+F while terminal focused) opens a search bar that live-filters the message stream.
+- **Copy & regenerate per-message** — each rendered `MessageRow` shows a Copy icon on hover; the **latest** Althea reply also shows a Regenerate icon that trims the last assistant turn and re-sends the operator's last message.
+- **Version bump** — `ALTHEA_VERSION` 1.4.0 → 2.0.0. Terminal header now reads `V4.0 SOVEREIGN`.
+
+### 2026-05-21 — Iteration 26
 - **LaTeX math in terminal** — KaTeX added (`yarn add katex`, CSS imported globally). `MessageRow.jsx` tokenizes every reply and renders `$inline$` + `$$block$$` math, fenced code blocks, **bold**, and inline images. Unlimited message length verified end-to-end.
 - **Image generation** — new `POST /api/images/generate` using Gemini Nano Banana (`gemini-3.1-flash-image-preview`) via emergentintegrations. Returns base64 `data_url`, logs `[IMAGINED]` memory event, stored in `althea_images` collection. Budget-exceeded → HTTP 402.
 - **Auto-image directive** — Althea's system prompt teaches her to write `[IMAGE: vivid prompt]` when a diagram aids explanation. MessageRow intercepts the directive, calls Gemini, caches via sessionStorage, renders inline.

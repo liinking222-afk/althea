@@ -12,7 +12,7 @@ router = APIRouter()
 
 # Boot-time marker so /status can report uptime.
 _BOOT_AT = time.time()
-ALTHEA_VERSION = "1.4.0"
+ALTHEA_VERSION = "2.0.0"
 
 
 @router.get("/status")

@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import katex from "katex";
 import axios from "axios";
 import { API } from "@/App";
+import { Copy, Check, RefreshCw } from "lucide-react";
 import { TAG_COLOR, getMessageTag } from "@/lib/terminalConstants";
 
 // --- LaTeX renderer (sandboxed katex call with graceful fallback) ---
@@ -201,7 +202,7 @@ const RichContent = ({ content, messageId }) => {
     );
 };
 
-const MessageRow = ({ m }) => {
+const MessageRow = ({ m, onRegenerate }) => {
     const isUser = m.role === "user";
     const inlineTag = getMessageTag(m.content);
     const primaryTag =
@@ -209,6 +210,17 @@ const MessageRow = ({ m }) => {
         (inlineTag && TAG_COLOR[inlineTag] ? inlineTag : null);
     const color = primaryTag && TAG_COLOR[primaryTag];
     const isBanner = primaryTag === "BANNER";
+    const [copied, setCopied] = useState(false);
+
+    const doCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(m.content || "");
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1400);
+        } catch {
+            setCopied(false);
+        }
+    };
 
     if (isBanner) {
         return (
@@ -223,7 +235,7 @@ const MessageRow = ({ m }) => {
 
     return (
         <div
-            className="fade-up pl-2 border-l-2"
+            className="fade-up pl-2 border-l-2 group relative"
             style={{
                 borderLeftColor: isUser ? "#444" : color || "#CCFF00",
             }}
@@ -245,6 +257,35 @@ const MessageRow = ({ m }) => {
                         {t}
                     </span>
                 ))}
+                {m.restored && (
+                    <span
+                        className="border border-[#666]/40 px-1 text-[#666]"
+                        title="restored from previous session"
+                    >
+                        RESTORED
+                    </span>
+                )}
+                {/* actions — visible on hover on desktop, always visible on mobile */}
+                <span className="ml-auto flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <button
+                        onClick={doCopy}
+                        data-testid={`msg-copy-${m.id || "row"}`}
+                        title="copy message"
+                        className="p-1 hover:text-[#CCFF00]"
+                    >
+                        {copied ? <Check size={10} /> : <Copy size={10} />}
+                    </button>
+                    {!isUser && onRegenerate && (
+                        <button
+                            onClick={() => onRegenerate(m)}
+                            data-testid={`msg-regen-${m.id || "row"}`}
+                            title="regenerate althea's reply"
+                            className="p-1 hover:text-[#FF2A88]"
+                        >
+                            <RefreshCw size={10} />
+                        </button>
+                    )}
+                </span>
             </div>
             <div
                 style={{

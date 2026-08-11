@@ -30,6 +30,8 @@ const ChatConsole = ({
     const [input, setInput] = useState("");
     const [sending, setSending] = useState(false);
     const [listening, setListening] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchOpen, setSearchOpen] = useState(false);
     const fileInputRef = useRef(null);
     const [speakOn, setSpeakOn] = useState(() => {
         const v = localStorage.getItem("althea_tts");
@@ -56,6 +58,39 @@ const ChatConsole = ({
         localStorage.setItem("althea_tts", speakOn ? "1" : "0");
     }, [speakOn]);
 
+    // Restore conversation history on mount so the operator sees exactly
+    // what was on-screen before the page reload. The backend has stored
+    // every turn under this session_id.
+    const restoredRef = useRef(false);
+    useEffect(() => {
+        if (restoredRef.current || !sessionId) return;
+        restoredRef.current = true;
+        (async () => {
+            try {
+                const res = await axios.get(`${API}/chat/history/${sessionId}`);
+                const turns = res.data || [];
+                if (!turns.length) return;
+                const restored = turns.slice(-120).map((t) => ({
+                    id: t.id,
+                    role: t.role === "user" ? "user" : "althea",
+                    content: t.content,
+                    tags: t.tags || [],
+                    timestamp: t.timestamp,
+                    restored: true,
+                }));
+                setMessages((prev) => {
+                    // Only prepend restored turns; if prev has non-boot messages
+                    // don't double-load.
+                    const hasReal = prev.some((m) => !m.tags?.includes("BANNER") && !m.tags?.includes("BOOT"));
+                    if (hasReal) return prev;
+                    return [...prev, ...restored];
+                });
+            } catch (e) {
+                console.warn("terminal history restore failed:", e);
+            }
+        })();
+    }, [sessionId]);
+
     // Ensure the input is always focused on first paint and after recovery.
     // Some browsers (mobile Safari) drop focus during hydration — retry.
     useEffect(() => {
@@ -68,9 +103,25 @@ const ChatConsole = ({
         tryFocus();
         const t1 = setTimeout(tryFocus, 120);
         const t2 = setTimeout(tryFocus, 600);
+        // Ctrl/Cmd+F opens the conversation search (only while terminal is
+        // active — we don't hijack the browser's global find outside our panel).
+        const onKey = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+                if (scrollRef.current?.closest(":focus-within")) {
+                    e.preventDefault();
+                    setSearchOpen(true);
+                }
+            }
+            if (e.key === "Escape") {
+                setSearchOpen(false);
+                setSearchQuery("");
+            }
+        };
+        window.addEventListener("keydown", onKey);
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
+            window.removeEventListener("keydown", onKey);
         };
     }, []);
 
@@ -968,11 +1019,22 @@ const ChatConsole = ({
         }
     };
 
+    // Regenerate: drop the last althea reply and re-send the last operator turn.
+    const regenerate = async () => {
+        if (sending) return;
+        // Find the last operator (user) message
+        const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+        if (lastUserIdx === -1) return;
+        const absoluteIdx = messages.length - 1 - lastUserIdx;
+        const lastUserMsg = messages[absoluteIdx];
+        // Trim any assistant replies after that user message
+        setMessages((m) => m.slice(0, absoluteIdx + 1));
+        await send(lastUserMsg.content);
+    };
+
     const send = async (textOverride) => {
         const text = (textOverride ?? input).trim();
-        if (!text || sending) return;
-
-        // Track in command history regardless of slash/natural
+        if (!text || sending) return;        // Track in command history regardless of slash/natural
         setHistory((h) => {
             if (h[0] === text) return h;
             return [text, ...h].slice(0, 50);
@@ -1153,10 +1215,22 @@ const ChatConsole = ({
                         className="label text-[9px] text-[#666]"
                         data-testid="terminal-version"
                     >
-                        v3.0 cyberpunk
+                        v4.0 sovereign
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setSearchOpen((v) => !v)}
+                        data-testid="terminal-search-toggle"
+                        title="search this conversation"
+                        className={`heading text-[10px] uppercase tracking-widest px-2 py-1 border ${
+                            searchOpen
+                                ? "border-[#00F0FF]/60 text-[#00F0FF] bg-[#00F0FF]/10"
+                                : "border-white/15 text-[#888] hover:text-white"
+                        }`}
+                    >
+                        find
+                    </button>
                     <button
                         onClick={() => setSpeakOn((s) => !s)}
                         data-testid="voice-output-toggle"
@@ -1181,6 +1255,27 @@ const ChatConsole = ({
                     </span>
                 </div>
             </header>
+            {searchOpen && (
+                <div className="px-4 py-2 border-b border-white/10 flex items-center gap-2 bg-black/40">
+                    <span className="label text-[9px] text-[#00F0FF]">find</span>
+                    <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="type to filter messages…"
+                        data-testid="terminal-search-input"
+                        className="flex-1 bg-transparent outline-none text-[11px] font-mono border-b border-white/10 focus:border-[#00F0FF]/60 pb-1"
+                        autoFocus
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery("")}
+                            className="label text-[9px] text-[#666] hover:text-[#00F0FF]"
+                        >
+                            clear
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div
                 ref={scrollRef}
@@ -1199,9 +1294,25 @@ const ChatConsole = ({
                     <div className="tick-line my-2" />
                 )}
 
-                {messages.map((m) => (
-                    <MessageRow key={m.id} m={m} />
-                ))}
+                {messages
+                    .filter((m) =>
+                        searchQuery
+                            ? (m.content || "")
+                                  .toLowerCase()
+                                  .includes(searchQuery.toLowerCase())
+                            : true,
+                    )
+                    .map((m, idx, arr) => (
+                        <MessageRow
+                            key={m.id}
+                            m={m}
+                            onRegenerate={
+                                idx === arr.length - 1 && m.role === "althea"
+                                    ? regenerate
+                                    : undefined
+                            }
+                        />
+                    ))}
                 {sending && (
                     <div className="text-[11px] text-[#888] caret">
                         althea reasoning

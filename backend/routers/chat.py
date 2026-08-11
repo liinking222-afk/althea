@@ -102,8 +102,30 @@ async def chat(req: ChatRequest):
                 )
         memory_block = "\n".join(lines)
 
+    # Verbatim conversation transcript — the LAST N turns of this session are
+    # injected literally so Althea can reference back exactly what was said.
+    # This is the difference between "vaguely remembering" and "actually
+    # remembering the last conversation".
+    transcript_block = ""
+    try:
+        turns = await db.althea_messages.find(
+            {"session_id": session_id}, {"_id": 0}
+        ).sort("timestamp", -1).to_list(20)
+        turns.reverse()  # oldest → newest
+        if turns:
+            lines = ["[CONVERSATION HISTORY — verbatim, oldest first]"]
+            for t in turns:
+                role = "operator" if t.get("role") == "user" else "althea"
+                content = (t.get("content") or "").replace("\n", " ")
+                lines.append(f"{role}: {content[:400]}")
+            transcript_block = "\n".join(lines)
+    except Exception:
+        transcript_block = ""
+
     ctx_block = build_context_block(req.context)
     system_prompt = ALTHEA_SYSTEM_PROMPT
+    if transcript_block:
+        system_prompt += "\n\n" + transcript_block
     if memory_block:
         system_prompt += "\n\n" + memory_block
     if ctx_block:
