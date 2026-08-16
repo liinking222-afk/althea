@@ -28,6 +28,7 @@ from routers import (  # noqa: E402
     perception,
     satellite,
     server_ops,
+    synthesis,
     system,
     web_bridge,
     workers,
@@ -57,6 +58,7 @@ api_router.include_router(evolution.router)
 api_router.include_router(diagnostics.router)
 api_router.include_router(images.router)
 api_router.include_router(workers.router)
+api_router.include_router(synthesis.router)
 
 app.include_router(api_router)
 

@@ -162,6 +162,36 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Autonomous SYNTHESIS daemon — every 2 min, quietly scan recent
+    // dialogue for capability gaps and grow one if a signal fires.
+    // Non-blocking, fire-and-forget. New capabilities appear in the
+    // notifications panel automatically.
+    useEffect(() => {
+        let cancelled = false;
+        const autoSynth = async () => {
+            try {
+                const res = await axios.post(
+                    `${API}/synthesize/from-dialogue`,
+                    { session_id: sessionId },
+                );
+                if (cancelled) return;
+                if (res.data?.synthesized) {
+                    notifications.refresh();
+                }
+            } catch (e) {
+                console.warn("autonomous synth failed:", e);
+            }
+        };
+        const t = setInterval(autoSynth, 2 * 60 * 1000);
+        const first = setTimeout(autoSynth, 90000); // first sweep ~90s after boot
+        return () => {
+            cancelled = true;
+            clearInterval(t);
+            clearTimeout(first);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId]);
+
     const openMemoryWithQuery = useCallback((query) => {
         setMemoryInitialQuery(query || "");
         setMemoryOpen(true);

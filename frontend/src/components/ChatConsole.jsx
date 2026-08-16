@@ -384,6 +384,47 @@ const ChatConsole = ({
                         ["WORKERS"],
                     );
                 }
+            } else if (cmd === "/synthesize" || cmd === "/autosynth") {
+                pushSystem(
+                    "[SYNTHESIS] scanning dialogue for capability gap…",
+                    ["SYNTHESIS"],
+                );
+                try {
+                    const res = await axios.post(
+                        `${API}/synthesize/from-dialogue`,
+                        { session_id: sessionId, force: rest.trim() === "force" },
+                    );
+                    const d = res.data;
+                    if (!d.synthesized) {
+                        pushSystem(
+                            `[SYNTHESIS] no gap detected. try '/synthesize force' to grow one anyway.`,
+                            ["SYNTHESIS"],
+                        );
+                    } else {
+                        const lines = (d.steps || []).map((s) => `[${s.stage}] ${s.detail}`);
+                        pushSystem(lines.join("\n"), ["SYNTHESIS", "AUTOSYNTH"]);
+                    }
+                } catch (e) {
+                    pushSystem(`[SYNTHESIS] error: ${e.message}`, ["SYNTHESIS"]);
+                }
+            } else if (cmd === "/gaps") {
+                const res = await axios.get(
+                    `${API}/synthesize/gaps?session_id=${encodeURIComponent(sessionId)}`,
+                );
+                const d = res.data;
+                if (!d.hits?.length) {
+                    pushSystem("[GAPS] no signal patterns matched recent dialogue.", ["SYNTHESIS"]);
+                } else {
+                    const lines = ["[GAPS] recent dialogue signal-matches:"];
+                    d.hits.forEach((h) => {
+                        const flag = h.already_grown ? "grown" : "AVAILABLE";
+                        lines.push(`  · ${h.slug_prefix.padEnd(22)} [${flag}]  ${h.description}`);
+                    });
+                    if (d.will_fire_next) {
+                        lines.push(`\nnext /synthesize will grow: ${d.will_fire_next}`);
+                    }
+                    pushSystem(lines.join("\n"), ["SYNTHESIS"]);
+                }
             } else if (cmd === "/imagine" || cmd === "/draw" || cmd === "/visualize") {
                 const prompt = rest.trim();
                 if (!prompt) {

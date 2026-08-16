@@ -55,7 +55,24 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-08-16 — Iteration 28 (THIS SESSION) — **8-CORE WORKER MESH**
+### 2026-08-16 — Iteration 29 (THIS SESSION) — **synthesize_capability_from_dialogue()**
+- **The coup de grâce** — full autonomous synthesis pipeline in `routers/synthesis.py`:
+  1. **Detect** capability gap in recent dialogue (10 regex signal patterns → matplotlib / pandas / regex / weather / market / translation / timezone / chemistry / fractal / FFT)
+  2. **Generate** real executable code from procedural templates (no LLM needed — 100% offline-capable)
+  3. **Safe-scan + syntax-check** the generated code
+  4. **Persist** to `/app/althea_grown_code/{slug}.py` with `auto_applied=True`
+  5. **Register** as `GrownCapability` with `trigger=autosynth`, `synthesized=True`
+  6. **Wire** into the lattice — new `CognitiveNode` with `is_synthesized=True`
+  7. **Emit** notification tagged `[SYNTHESIS]/[CODE-GEN]/[EXEC]/[LATTICE]`
+- **`POST /api/synthesize/from-dialogue`** — full pipeline
+- **`POST /api/synthesize/invoke`** — loads the on-disk module and calls its `run()`; defense-in-depth re-runs safe-scan before exec. Bumps `invocations` counter.
+- **`GET /api/synthesize/gaps`** — preview which signals fired without growing anything.
+- Terminal commands: `/synthesize [force]`, `/autosynth`, `/gaps`.
+- **Autonomous daemon** in `App.js` — every 2 min, quietly scans dialogue and grows if a gap fires. First sweep 90s after boot.
+- **matplotlib 3.11.1** installed and pinned in `requirements.txt` so the synthesized data-visualization capability actually renders real PNG charts. Verified end-to-end: `run([1,4,2,8,5,7,3], title="daily productivity")` returns a real 17KB PNG data URL.
+
+### 2026-08-16 — Iteration 28
+- **8-core worker mesh** shipped.
 - **Verified iter 22–27**: v2.0.0, ALL_SYSTEMS_NOMINAL diagnostics, indexed memory (382 docs), image gen live, KaTeX render, verbatim conversation memory works (told her "may 10" → next turn she quoted it back).
 - **8-core worker mesh** (`/app/backend/routers/workers.py`) — 8 specialized micro-cores running in a rotation loop that ticks every 2s (16s full sweep). Each core does real work but never calls the cloud LLM (preserves universal-key budget):
   - `COGNITIVE-CORE` — memory index warming (count + probe)
