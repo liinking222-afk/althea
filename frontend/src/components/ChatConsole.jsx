@@ -349,6 +349,41 @@ const ChatConsole = ({
                         ["MEMORY"],
                     );
                 }
+            } else if (cmd === "/workers" || cmd === "/cores") {
+                const res = await axios.get(`${API}/workers`);
+                const d = res.data || {};
+                const lines = [
+                    `[WORKERS] loop=${d.loop_running ? "live" : "stopped"} ` +
+                    `uptime=${d.uptime_seconds}s total_jobs=${d.total_jobs}`,
+                ];
+                (d.cores || []).forEach((c) => {
+                    lines.push(
+                        `  · ${c.name.padEnd(20)} ${c.active ? "ON " : "OFF"} ` +
+                        `${String(c.jobs_done).padStart(4)}j  ${c.last_task}`,
+                    );
+                });
+                pushSystem(lines.join("\n"), ["WORKERS"]);
+            } else if (cmd === "/sweep") {
+                const res = await axios.post(`${API}/workers/dispatch`);
+                pushSystem(
+                    `[WORKERS] full sweep dispatched · ${res.data.dispatched.length} cores fired ` +
+                    `· total_jobs=${res.data.total_jobs}`,
+                    ["WORKERS"],
+                );
+            } else if (cmd === "/kick") {
+                const id = rest.trim();
+                if (!id) {
+                    pushSystem(
+                        "[WORKERS] usage: /kick <core-id> (cog|per|evo|gro|lat|net|diag|code)",
+                        ["WORKERS"],
+                    );
+                } else {
+                    const res = await axios.post(`${API}/workers/${id}/kick`);
+                    pushSystem(
+                        `[WORKERS] kicked ${res.data.kicked} · ${res.data.state.last_task}`,
+                        ["WORKERS"],
+                    );
+                }
             } else if (cmd === "/imagine" || cmd === "/draw" || cmd === "/visualize") {
                 const prompt = rest.trim();
                 if (!prompt) {

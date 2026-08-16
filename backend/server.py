@@ -30,6 +30,7 @@ from routers import (  # noqa: E402
     server_ops,
     system,
     web_bridge,
+    workers,
 )
 
 
@@ -55,6 +56,7 @@ api_router.include_router(desktop.router)
 api_router.include_router(evolution.router)
 api_router.include_router(diagnostics.router)
 api_router.include_router(images.router)
+api_router.include_router(workers.router)
 
 app.include_router(api_router)
 
@@ -73,6 +75,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@app.on_event("startup")
+async def start_background_workers():
+    workers.start_workers()
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    workers.stop_workers()
     mongo_client.close()

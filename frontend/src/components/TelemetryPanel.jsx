@@ -1,6 +1,7 @@
 import React from "react";
 import MiniMap from "@/components/MiniMap";
 import PermissionsPanel from "@/components/PermissionsPanel";
+import WorkerCoresPanel from "@/components/WorkerCoresPanel";
 
 const TelemetryPanel = ({ online, geo, permissions, togglePermission }) => {
     return (
@@ -52,6 +53,9 @@ const TelemetryPanel = ({ online, geo, permissions, togglePermission }) => {
                     </div>
                 )}
             </div>
+
+            {/* 8-core worker mesh */}
+            <WorkerCoresPanel />
 
             {/* Permissions */}
             <PermissionsPanel

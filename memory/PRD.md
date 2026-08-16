@@ -55,7 +55,24 @@ Evolved requirements:
 - Self-observation module (html2canvas on `#althea-container` → /api/perception/frame)
 - `/api/growth/stats` aggregate telemetry endpoint
 
-### 2026-08-11 — Iteration 27 (THIS SESSION) — **v2.0 SOVEREIGN**
+### 2026-08-16 — Iteration 28 (THIS SESSION) — **8-CORE WORKER MESH**
+- **Verified iter 22–27**: v2.0.0, ALL_SYSTEMS_NOMINAL diagnostics, indexed memory (382 docs), image gen live, KaTeX render, verbatim conversation memory works (told her "may 10" → next turn she quoted it back).
+- **8-core worker mesh** (`/app/backend/routers/workers.py`) — 8 specialized micro-cores running in a rotation loop that ticks every 2s (16s full sweep). Each core does real work but never calls the cloud LLM (preserves universal-key budget):
+  - `COGNITIVE-CORE` — memory index warming (count + probe)
+  - `PERCEPTION-CORE` — self-vision buffer freshness
+  - `EVOLUTION-CORE` — pre-warms archetype seeds via local_evolution_seed
+  - `GROWTH-CORE` — pre-warms fallback capabilities via local_invent_capability
+  - `LATTICE-CORE` — node count refresh
+  - `NETWORK-CORE` — mongo uplink heartbeat
+  - `DIAGNOSTIC-CORE` — audit of 4 core collection counts
+  - `CODEGEN-CORE` — code shelf applied ratio
+- **HTTP api**: `GET /api/workers`, `GET /api/workers/{id}`, `POST /api/workers/{id}/kick`, `POST /api/workers/{id}/toggle`, `POST /api/workers/dispatch`
+- **Frontend** — new `WorkerCoresPanel.jsx` mounted in the right telemetry column. Live 2×4 core grid with color-coded status bars, per-core kick/power buttons, `SWEEP` button that fires all cores in parallel. Polls every 3s.
+- **Terminal commands** — `/workers` (or `/cores`), `/sweep`, `/kick <id>` — the main Althea + operator can command any core.
+- **System prompt updated** — Althea now knows about her 8 cores and can reference/deploy them by name in replies.
+- Startup hook in `server.py` starts the worker loop on FastAPI boot; shutdown hook cancels it cleanly.
+
+### 2026-08-11 — Iteration 27
 - **Verbatim conversation memory** — `routers/chat.py` now injects the last 20 turns of THIS session verbatim into Althea's system prompt (`[CONVERSATION HISTORY — verbatim, oldest first]`). Combined with the recent + semantic memory blocks from iter 25, she literally quotes back what the operator said moments ago. Verified: refreshed the page → sent "what did I just tell you was my favorite constant?" → she replied "You just told me your favorite constant is Euler's number e" with the limit definition and a follow-up question.
 - **Terminal history restore on load** — `ChatConsole.jsx` mount-effect calls `GET /api/chat/history/{sessionId}` and rehydrates messages with a `RESTORED` label so the operator sees the same conversation after a page reload / new device / re-open.
 - **Search & filter** — new `find` button (Ctrl/⌘+F while terminal focused) opens a search bar that live-filters the message stream.
