@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 import random
 import re
+
+import httpx
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -54,6 +56,9 @@ GAP_SIGNALS = [
     (r"\bschematic|wiring diagram|circuit diagram\b", "schematic-render",
         "engineering-graphics",
         "Draw a blueprint-style schematic diagram of named components."),
+    (r"\bsatellit|orbital|\btle\b|\biss\b|space station|starlink",
+        "orbital-propagation", "astronomy-navigation",
+        "Propagate satellite orbits from TLE (SGP4) and predict passes."),
 ]
 
 
@@ -327,6 +332,77 @@ def run(components, *, title="SCHEMATIC"):
         "n_components": n,
     }
 ''',
+    "orbital-propagation": '''from skyfield.api import EarthSatellite, load, wgs84
+
+
+def run(tle_line1, tle_line2, observer_lat=51.4779, observer_lon=-0.0015,
+        hours_ahead=24, step_min=2, name="TARGET", min_elevation=10.0):
+    """SGP4 orbital propagation from a TLE. Computes the satellite's live
+    subpoint and geometric passes (elevation >= min_elevation) over the
+    observer. Pure offline math — skyfield built-in timescale, no downloads."""
+    ts = load.timescale(builtin=True)
+    sat = EarthSatellite(str(tle_line1).strip(), str(tle_line2).strip(),
+                         str(name), ts)
+    observer = wgs84.latlon(float(observer_lat), float(observer_lon))
+    now = ts.now()
+    dt = now.utc_datetime()
+    hours = max(1, min(int(hours_ahead), 72))
+    step = max(1, int(step_min))
+    steps = int(hours * 60 / step)
+    t = ts.utc(dt.year, dt.month, dt.day, dt.hour,
+               [dt.minute + i * step for i in range(steps)])
+    topo = (sat - observer).at(t)
+    alt, az, dist = topo.altaz()
+    alts = alt.degrees
+    azs = az.degrees
+    kms = dist.km
+    geo = sat.at(now)
+    sp = wgs84.subpoint(geo)
+    passes = []
+    cur = None
+    for i in range(steps):
+        if float(alts[i]) >= min_elevation:
+            if cur is None:
+                cur = {"rise_utc": t[i].utc_iso(),
+                       "max_alt_deg": round(float(alts[i]), 1),
+                       "max_alt_utc": t[i].utc_iso(),
+                       "min_range_km": round(float(kms[i]), 1)}
+            else:
+                if float(alts[i]) > cur["max_alt_deg"]:
+                    cur["max_alt_deg"] = round(float(alts[i]), 1)
+                    cur["max_alt_utc"] = t[i].utc_iso()
+                cur["min_range_km"] = min(cur["min_range_km"],
+                                          round(float(kms[i]), 1))
+        elif cur is not None:
+            cur["set_utc"] = t[i].utc_iso()
+            passes.append(cur)
+            cur = None
+            if len(passes) >= 6:
+                break
+    if cur is not None and len(passes) < 6:
+        cur["set_utc"] = "beyond window"
+        passes.append(cur)
+    stride = max(1, steps // 48)
+    track = [{"utc": t[i].utc_iso(), "alt_deg": round(float(alts[i]), 2),
+              "az_deg": round(float(azs[i]), 2),
+              "range_km": round(float(kms[i]), 1)}
+             for i in range(0, steps, stride)]
+    return {
+        "ok": True,
+        "name": str(name),
+        "algorithm": "SGP4 (skyfield)",
+        "epoch_utc": now.utc_iso(),
+        "subpoint": {"lat": round(float(sp.latitude.degrees), 4),
+                     "lon": round(float(sp.longitude.degrees), 4),
+                     "altitude_km": round(float(sp.elevation.km), 1)},
+        "observer": {"lat": float(observer_lat), "lon": float(observer_lon)},
+        "min_elevation_deg": float(min_elevation),
+        "visible_passes": passes,
+        "window_hours": hours,
+        "n_samples": steps,
+        "track_sample": track,
+    }
+''',
 }
 
 
@@ -529,6 +605,10 @@ INBAND_SIGNALS = [
         "generative-art", "Compute and render a fractal region."),
     (re.compile(r"\b(fft|fourier|spectral)\b", re.IGNORECASE), "spectral-analysis",
         "signals", "Compute the FFT / spectral profile of a signal."),
+    (re.compile(r"\b(satellite|iss|space station|tle|starlink|hubble)\b",
+                re.IGNORECASE), "orbital-propagation",
+        "astronomy-navigation",
+        "Propagate satellite orbits from TLE (SGP4) and predict passes."),
 ]
 
 
@@ -641,7 +721,116 @@ async def inband_autosynth_hook(user_message: str, session_id) -> Optional[tuple
                     f" locally (0 credits) — n={r['n']}\n```\n|X(k)| = [{mags}]\n```"
                 )
                 return block, slug
+        elif prefix == "orbital-propagation":
+            if not re.search(
+                r"\b(track|pass(es)?|where|position|overhead|visible|orbit)\b",
+                text, re.IGNORECASE,
+            ):
+                continue
+            nm = None
+            m2 = re.search(
+                r"track(?:ing)?\s+(?:the\s+)?([A-Za-z0-9][A-Za-z0-9 \-()]{1,28})",
+                text, re.IGNORECASE,
+            )
+            if m2:
+                nm = m2.group(1).strip()
+            if not nm or re.search(r"\b(iss|space station)\b", text, re.IGNORECASE):
+                nm = "ISS"
+            tle = await _fetch_tle(nm)
+            if not tle:
+                return None
+            slug = await _ensure_capability(prefix, category, desc, session_id)
+            if not slug:
+                return None
+            out = _load_and_run(
+                slug, [tle["line1"], tle["line2"]],
+                {"name": tle["name"], "hours_ahead": 24},
+            )
+            r = out.get("result") if out.get("ok") else None
+            if r and r.get("ok"):
+                await db.althea_capabilities.update_one(
+                    {"slug": slug}, {"$inc": {"invocations": 1}},
+                )
+                return _format_orbital_block(slug, r), slug
     return None
+
+
+# ---------- live TLE fetch (trusted uplink code — grown modules stay offline)
+TLE_API = "https://tle.ivanstanojevic.me/api/tle"
+CELESTRAK = "https://celestrak.org/NORAD/elements/gp.php"
+
+
+async def _fetch_tle(query: str) -> Optional[dict]:
+    q = (query or "").strip()
+    catnr = None
+    if not q or q.lower() in ("iss", "iss (zarya)", "space station", "the iss"):
+        catnr = "25544"
+    elif q.isdigit():
+        catnr = q
+    async with httpx.AsyncClient(
+        timeout=12.0, follow_redirects=True, headers={"User-Agent": UA_TLE},
+    ) as cx:
+        # primary: TLE API (keyless, reachable, fresh data)
+        try:
+            if catnr:
+                r = await cx.get(f"{TLE_API}/{catnr}")
+                if r.status_code == 200:
+                    d = r.json()
+                    if d.get("line1") and d.get("line2"):
+                        return {"name": d.get("name", q or "TARGET"),
+                                "line1": d["line1"], "line2": d["line2"]}
+            else:
+                r = await cx.get(TLE_API, params={"search": q})
+                if r.status_code == 200:
+                    members = r.json().get("member") or []
+                    if members:
+                        d = members[0]
+                        return {"name": d.get("name", q),
+                                "line1": d["line1"], "line2": d["line2"]}
+        except (httpx.RequestError, ValueError, KeyError):
+            pass
+        # fallback: celestrak (blocked from some networks)
+        try:
+            params = {"FORMAT": "TLE"}
+            params["CATNR" if catnr else "NAME"] = catnr or q
+            r = await cx.get(CELESTRAK, params=params)
+            lines = [ln.strip() for ln in r.text.strip().splitlines() if ln.strip()]
+            if len(lines) >= 3 and lines[1].startswith("1 ") and lines[2].startswith("2 "):
+                return {"name": lines[0], "line1": lines[1], "line2": lines[2]}
+        except httpx.RequestError:
+            return None
+    return None
+
+
+UA_TLE = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def _format_orbital_block(slug: str, r: dict) -> str:
+    sp = r["subpoint"]
+    lines = [
+        f"\n\n[AUTOSYNTH-INVOKE /{slug}] SGP4 propagation — {r['name']} "
+        f"(live TLE via uplink · 0 credits)",
+        "```",
+        f"NOW: subpoint {sp['lat']}°, {sp['lon']}° · altitude {sp['altitude_km']} km",
+        f"observer {r['observer']['lat']}, {r['observer']['lon']} (Greenwich default)"
+        f" · window {r['window_hours']}h · min elev {r['min_elevation_deg']}°",
+    ]
+    if r["visible_passes"]:
+        lines.append("next geometric passes (UTC):")
+        for p in r["visible_passes"][:4]:
+            rise = str(p["rise_utc"])[5:16].replace("T", " ")
+            setl = str(p["set_utc"])[5:16].replace("T", " ") or "…"
+            lines.append(
+                f"  rise {rise} → max {p['max_alt_deg']}° → set {setl}"
+                f" · closest {p['min_range_km']} km"
+            )
+    else:
+        lines.append("no passes above threshold in this window")
+    lines.append("```")
+    return "\n".join(lines)
 
 
 # ---------- blueprint schematic (invoked by chat.py forge) ----------
@@ -682,6 +871,37 @@ async def render_blueprint_schematic(reply_text: str, session_id=None) -> Option
         )
         return r["data_url"]
     return None
+
+
+class OrbitalRequest(BaseModel):
+    name: str = "ISS"
+    lat: float = 51.4779
+    lon: float = -0.0015
+    hours: int = 24
+
+
+@router.post("/synthesize/orbital")
+async def orbital_track(req: OrbitalRequest):
+    """Fetch a live TLE and propagate via the self-grown SGP4 module."""
+    tle = await _fetch_tle(req.name)
+    if not tle:
+        raise HTTPException(status_code=502, detail="tle_fetch_failed")
+    slug = await _ensure_capability(
+        "orbital-propagation", "astronomy-navigation",
+        "Propagate satellite orbits from TLE (SGP4) and predict passes.", None,
+    )
+    if not slug:
+        raise HTTPException(status_code=500, detail="capability_unavailable")
+    out = _load_and_run(slug, [tle["line1"], tle["line2"]], {
+        "observer_lat": req.lat, "observer_lon": req.lon,
+        "hours_ahead": max(1, min(req.hours, 72)), "name": tle["name"],
+    })
+    if not out.get("ok"):
+        raise HTTPException(status_code=500, detail=out.get("error", "invoke_failed"))
+    await db.althea_capabilities.update_one(
+        {"slug": slug}, {"$inc": {"invocations": 1}},
+    )
+    return {"slug": slug, "tle": tle, "result": out["result"]}
 
 
 # ---------- HTTP api ----------

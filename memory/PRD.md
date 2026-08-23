@@ -41,6 +41,22 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-23 — Iteration 33 (THIS SESSION) — Orbital Propagation Capability (user-requested)
+- **/autonomous-orbital-propagation** (astronomy-navigation): user supplied a skyfield/SGP4 concept
+  snippet; implemented properly as a self-grown module template in synthesis.py — pure offline math
+  (skyfield built-in timescale, no downloads in grown code), computes live subpoint + geometric
+  passes (rise/max/set/range, elev ≥ 10°) over an observer. Fixed the snippet's bugs (generator into
+  ts.utc, per-step loop → vectorized arrays, numpy float64 JSON leak).
+- **Live TLE via uplink (trusted code)**: `_fetch_tle()` — primary tle.ivanstanojevic.me API
+  (celestrak is blocked from the pod; kept as fallback). By CATNR, name search, ISS aliases.
+- **Wiring**: POST /api/synthesize/orbital {name,lat,lon,hours}; in-band chat hook — "where is the
+  ISS / track hubble" auto-invokes the grown module and appends the pass table (0 LLM overhead);
+  terminal `/track [sat] [@lat,lon]` (default ISS, Greenwich observer); ORBITAL tag; system prompt
+  updated. skyfield==1.55 + sgp4==2.27 frozen in requirements.txt.
+- **Testing**: self-tested E2E — endpoint (ISS + HUBBLE name-search, fresh epoch 26234 TLE,
+  subpoint 418 km ✓), in-band chat (AUTOSYNTH tag + pass block), terminal /track screenshot verified.
+
+
 ### 2026-08-23 — Iteration 32 (THIS SESSION) — Drawn Blueprint Schematics + Lattice Hum
 - **Blueprint Diagrams**: forged blueprints now embed a REAL drawn schematic PNG (not just ASCII),
   produced by a new self-grown module `autonomous-schematic-render-*` (matplotlib flow diagram on

@@ -485,6 +485,36 @@ const ChatConsole = ({
                     `lattice released ${d.lattice.energy_released} E`,
                     ["NEURAL"],
                 );
+            } else if (cmd === "/track") {
+                const parts = rest.trim();
+                let name = parts || "ISS";
+                let lat = 51.4779, lon = -0.0015;
+                const at = parts.match(/@\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+                if (at) {
+                    lat = parseFloat(at[1]);
+                    lon = parseFloat(at[2]);
+                    name = parts.replace(at[0], "").trim() || "ISS";
+                }
+                pushSystem(`[ORBITAL] fetching live TLE for "${name}" and propagating (SGP4)…`, ["ORBITAL"]);
+                const res = await axios.post(`${API}/synthesize/orbital`, { name, lat, lon, hours: 24 });
+                const d = res.data.result;
+                const sp = d.subpoint;
+                const lines = [
+                    `[ORBITAL] ${d.name} · ${d.algorithm} · live TLE via uplink`,
+                    `  now over ${sp.lat}°, ${sp.lon}° @ ${sp.altitude_km} km`,
+                    `  observer ${d.observer.lat}, ${d.observer.lon} · ${d.window_hours}h window · min elev ${d.min_elevation_deg}°`,
+                ];
+                if (d.visible_passes.length) {
+                    lines.push("  next geometric passes (UTC):");
+                    d.visible_passes.slice(0, 4).forEach((p) => {
+                        lines.push(
+                            `    rise ${String(p.rise_utc).slice(5, 16).replace("T", " ")} → max ${p.max_alt_deg}° → set ${String(p.set_utc).slice(5, 16).replace("T", " ")} · ${p.min_range_km} km`,
+                        );
+                    });
+                } else {
+                    lines.push("  no geometric passes above threshold in the next 24h");
+                }
+                pushSystem(lines.join("\n"), ["ORBITAL"]);
             } else if (cmd === "/imagine" || cmd === "/draw" || cmd === "/visualize") {
                 const prompt = rest.trim();
                 if (!prompt) {
