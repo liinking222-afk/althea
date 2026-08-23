@@ -54,6 +54,43 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
     const zoomRef = useRef({ z: 14, min: 2, max: 5000, target: 14 });
     const [zoomUi, setZoomUi] = React.useState(14);
 
+    // ---- ambient lattice hum (Web Audio) — rises with activity ----
+    const audioRef = useRef(null);
+    const [soundOn, setSoundOn] = React.useState(false);
+    const toggleSound = () => {
+        if (!audioRef.current) {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            const filter = ctx.createBiquadFilter();
+            filter.type = "lowpass";
+            filter.frequency.value = 320;
+            filter.Q.value = 4;
+            const o1 = ctx.createOscillator();
+            o1.type = "sine";
+            o1.frequency.value = 55;
+            const o2 = ctx.createOscillator();
+            o2.type = "triangle";
+            o2.frequency.value = 110.7;
+            const o2g = ctx.createGain();
+            o2g.gain.value = 0.35;
+            o1.connect(filter);
+            o2.connect(o2g);
+            o2g.connect(filter);
+            filter.connect(gain);
+            gain.connect(ctx.destination);
+            o1.start();
+            o2.start();
+            audioRef.current = { ctx, gain, filter, on: false };
+        }
+        const a = audioRef.current;
+        a.on = !a.on;
+        if (a.on) a.ctx.resume();
+        setSoundOn(a.on);
+    };
+
     useEffect(() => {
         onClickRef.current = onLatticeNodeClick;
     }, [onLatticeNodeClick]);
@@ -610,6 +647,17 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             core.material.opacity =
                 0.18 + activityBoost * 0.15 + 0.04 * Math.sin(t * 2.4);
 
+            // ambient hum — swells with lattice activity
+            const hum = audioRef.current;
+            if (hum) {
+                const target = hum.on
+                    ? Math.min(0.02 + activityBoost * 0.06, 0.18)
+                    : 0;
+                hum.gain.gain.value += (target - hum.gain.gain.value) * 0.05;
+                hum.filter.frequency.value =
+                    300 + activityBoost * 500 + Math.sin(t * 0.7) * 40;
+            }
+
             // animate lattice satellites (faster, larger pulse)
             latticeMeshes.forEach((m) => {
                 // Spin EVO halo rings
@@ -662,6 +710,10 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             cancelAnimationFrame(raf);
             clearInterval(latticePoll);
             window.removeEventListener("althea:activity", onActivity);
+            try {
+                audioRef.current?.ctx.close();
+                audioRef.current = null;
+            } catch (e) { /* already closed */ }
             window.removeEventListener("resize", onResize);
             window.removeEventListener("mouseup", onUp);
             window.removeEventListener("mousemove", onMove);
@@ -783,6 +835,18 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
 
                     {/* Zoom controls */}
                     <div className="absolute bottom-4 right-4 flex flex-col gap-1 pointer-events-auto">
+                        <button
+                            onClick={toggleSound}
+                            data-testid="lattice-sound-toggle"
+                            title="ambient lattice hum — swells with activity"
+                            className={`w-8 h-6 border heading text-[9px] ${
+                                soundOn
+                                    ? "border-[#CCFF00]/70 text-[#CCFF00] bg-[#CCFF00]/10"
+                                    : "border-white/15 text-[#888] hover:text-[#CCFF00] hover:border-[#CCFF00]/40"
+                            }`}
+                        >
+                            {soundOn ? "HUM" : "MUTE"}
+                        </button>
                         <button
                             onClick={() => window.__althea_zoom?.(-1)}
                             data-testid="neural-zoom-in"

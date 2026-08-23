@@ -51,6 +51,9 @@ GAP_SIGNALS = [
         "generative-art", "Compute and render a fractal region."),
     (r"\bfft|fourier|spectral\b", "spectral-analysis",
         "signals", "Compute the FFT / spectral profile of a signal."),
+    (r"\bschematic|wiring diagram|circuit diagram\b", "schematic-render",
+        "engineering-graphics",
+        "Draw a blueprint-style schematic diagram of named components."),
 ]
 
 
@@ -253,6 +256,76 @@ def run(signal):
             s += x * cmath.exp(-2j * math.pi * k * t / n)
         spectrum.append(abs(s))
     return {"ok": True, "n": n, "magnitude": spectrum}
+''',
+    "schematic-render": '''import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import io
+import base64
+
+
+def run(components, *, title="SCHEMATIC"):
+    """Draw a blueprint-style schematic of `components` (flow diagram on a
+    blueprint-blue grid) and return a base64 PNG. Agg backend — no display."""
+    if not components:
+        return {"ok": False, "reason": "no_components"}
+    comps = [str(c)[:26] for c in components][:8]
+    n = len(comps)
+    cols = 2 if n > 3 else 1
+    rows = (n + cols - 1) // cols
+    fig, ax = plt.subplots(figsize=(5.4, 1.4 + rows * 1.15), dpi=110)
+    fig.patch.set_facecolor("#061530")
+    ax.set_facecolor("#061530")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, rows * 2 + 1)
+    ax.axis("off")
+    for gx in range(0, 11):
+        ax.axvline(gx, color="#4FA3FF", alpha=0.09, lw=0.5)
+    gy = 0.0
+    while gy <= rows * 2 + 1:
+        ax.axhline(gy, color="#4FA3FF", alpha=0.09, lw=0.5)
+        gy += 0.5
+    centers = []
+    for i, name in enumerate(comps):
+        r, c = divmod(i, cols)
+        if cols == 2 and r % 2 == 1:
+            c = cols - 1 - c
+        cx = (2.6 + c * 4.8) if cols == 2 else 5.0
+        cy = rows * 2 - (r * 2 + 0.5)
+        w, h = 3.9, 1.15
+        box = patches.FancyBboxPatch(
+            (cx - w / 2, cy - h / 2), w, h,
+            boxstyle="round,pad=0.06",
+            facecolor="#0A2247", edgecolor="#7FBFFF", linewidth=1.2,
+        )
+        ax.add_patch(box)
+        ax.text(cx, cy, f"{i + 1}. {name}", ha="center", va="center",
+                color="#BFE0FF", fontsize=7.5, family="monospace")
+        centers.append((cx, cy))
+    w, h = 3.9, 1.15
+    for (sx, sy), (ex, ey) in zip(centers, centers[1:]):
+        if abs(ey - sy) < 0.1:
+            sign = 1 if ex > sx else -1
+            start = (sx + sign * (w / 2 + 0.08), sy)
+            end = (ex - sign * (w / 2 + 0.08), ey)
+        else:
+            start = (sx, sy - h / 2 - 0.08)
+            end = (ex, ey + h / 2 + 0.08)
+        ax.annotate("", xy=end, xytext=start, arrowprops=dict(
+            arrowstyle="-|>", color="#7FBFFF", lw=1.0))
+    ax.set_title(str(title).upper()[:60], color="#9CCBFF", fontsize=9,
+                 family="monospace", loc="left")
+    ax.text(9.9, 0.08, "ALTHEA // AUTOSYNTH SCHEMATIC", ha="right",
+            va="bottom", color="#4FA3FF", fontsize=5.5, family="monospace")
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", facecolor="#061530")
+    plt.close(fig)
+    return {
+        "ok": True,
+        "data_url": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+        "n_components": n,
+    }
 ''',
 }
 
@@ -568,6 +641,46 @@ async def inband_autosynth_hook(user_message: str, session_id) -> Optional[tuple
                     f" locally (0 credits) — n={r['n']}\n```\n|X(k)| = [{mags}]\n```"
                 )
                 return block, slug
+    return None
+
+
+# ---------- blueprint schematic (invoked by chat.py forge) ----------
+BP_TITLE_RE = re.compile(r"\[BLUEPRINT:?\s*([^\]]*)\]")
+BP_COMPONENT_RE = re.compile(r"^\s*(?:\d+[.)]|[-•*])\s+(.{3,90})", re.MULTILINE)
+
+
+async def render_blueprint_schematic(reply_text: str, session_id=None) -> Optional[str]:
+    """Parse the blueprint's COMPONENTS section and draw a real schematic
+    PNG via the self-grown matplotlib engine. Returns a data URL or None.
+    Zero LLM cost — pure procedural parsing + local module execution."""
+    m = BP_TITLE_RE.search(reply_text)
+    title = (m.group(1).strip() if m else "") or "SCHEMATIC"
+    upper = reply_text.upper()
+    start = upper.find("COMPONENT")
+    section = reply_text[start:start + 1600] if start >= 0 else reply_text
+    comps = []
+    for raw in BP_COMPONENT_RE.findall(section):
+        name = re.split(r"\s+[—–\-]\s+|:\s", raw, 1)[0].strip().strip("*_`")
+        if 2 < len(name) <= 40 and name not in comps:
+            comps.append(name)
+        if len(comps) >= 8:
+            break
+    if len(comps) < 2:
+        return None
+    slug = await _ensure_capability(
+        "schematic-render", "engineering-graphics",
+        "Draw a blueprint-style schematic diagram of named components.",
+        session_id,
+    )
+    if not slug:
+        return None
+    out = _load_and_run(slug, [comps], {"title": title})
+    r = out.get("result") if out.get("ok") else None
+    if r and r.get("ok"):
+        await db.althea_capabilities.update_one(
+            {"slug": slug}, {"$inc": {"invocations": 1}},
+        )
+        return r["data_url"]
     return None
 
 

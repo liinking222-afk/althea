@@ -41,6 +41,23 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-23 — Iteration 32 (THIS SESSION) — Drawn Blueprint Schematics + Lattice Hum
+- **Blueprint Diagrams**: forged blueprints now embed a REAL drawn schematic PNG (not just ASCII),
+  produced by a new self-grown module `autonomous-schematic-render-*` (matplotlib flow diagram on
+  blueprint-blue grid, edge-to-edge arrows, snake layout, title block). Pipeline: chat.py detects
+  [BLUEPRINT → `render_blueprint_schematic()` (synthesis.py) parses the COMPONENTS section
+  procedurally → `_ensure_capability("schematic-render")` grows/loads the module → PNG injected as
+  [SCHEMATIC-IMAGE:...] inside the sheet. MessageRow renders it above the spec text. 0 LLM credits.
+  New GAP_SIGNAL + TEMPLATE "schematic-render" added to the synthesis engine.
+- **Lattice Sound**: Web Audio ambient hum in NeuralCore — dual detuned oscillators (55/110.7 Hz)
+  through a lowpass filter; gain swells with `activityBoost` (chat send/reply surges), filter
+  frequency breathes. HUM/MUTE toggle on the lattice HUD (data-testid lattice-sound-toggle),
+  starts only on user gesture (autoplay-safe), cleanly closed on unmount.
+- **Testing**: self-tested (small batch) — backend python invocation produced valid PNGs (arrow
+  edge-fix verified visually), E2E chat call embedded [SCHEMATIC-IMAGE:, browser screenshot confirmed
+  blueprint-doc + schematic img render from restored history and HUM toggle works.
+
+
 ### 2026-08-23 — Iteration 31 (THIS SESSION) — Terminal v5.0 APEX + Document Forge + Server-side Autonomy
 - **Document Forge**: Althea writes formal letters ([LETTER]...[/LETTER] → rendered as ivory paper
   documents with copy/download) and engineering blueprints ([BLUEPRINT: title] → cyan grid blueprint

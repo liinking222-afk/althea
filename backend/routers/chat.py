@@ -22,7 +22,7 @@ from models import (
 from system_prompt import ALTHEA_SYSTEM_PROMPT
 from utils import build_context_block, next_node_id, semantic_recall
 from local_core import local_reply, sanitize_reply
-from routers.synthesis import inband_autosynth_hook
+from routers.synthesis import inband_autosynth_hook, render_blueprint_schematic
 from routers.web_access import inband_web_uplink
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -191,6 +191,20 @@ async def chat(req: ChatRequest):
         reply_text += "\n[/BLUEPRINT]"
     if "[LETTER]" in reply_text or "[BLUEPRINT" in reply_text:
         tags.append("FORGE")
+
+    # Blueprint schematic — draw a REAL schematic PNG via the self-grown
+    # matplotlib engine and embed it inside the blueprint sheet (0 credits).
+    if "[BLUEPRINT" in reply_text:
+        try:
+            schematic = await render_blueprint_schematic(reply_text, session_id)
+            if schematic:
+                reply_text = reply_text.replace(
+                    "[/BLUEPRINT]",
+                    f"\n[SCHEMATIC-IMAGE:{schematic}]\n[/BLUEPRINT]",
+                    1,
+                )
+        except Exception:
+            logging.exception("blueprint schematic render failed")
 
     # In-band autosynth: if the operator asked for something a self-grown
     # module can compute (plot / fractal / FFT), invoke it locally and append

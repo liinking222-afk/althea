@@ -235,7 +235,9 @@ const RichContent = ({ content, messageId }) => {
                             </div>
                         </div>
                     );
-                if (t.type === "blueprint")
+                if (t.type === "blueprint") {
+                    const schemMatch = t.value.match(/\[SCHEMATIC-IMAGE:([^\]]+)\]/);
+                    const bodyText = t.value.replace(/\n?\[SCHEMATIC-IMAGE:[^\]]+\]\n?/, "\n");
                     return (
                         <div key={i} className="my-3 blueprint-sheet" data-testid="blueprint-doc">
                             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[#4FA3FF]/40 flex-wrap">
@@ -250,7 +252,7 @@ const RichContent = ({ content, messageId }) => {
                                         onClick={() =>
                                             downloadText(
                                                 `blueprint-${t.title.replace(/\s+/g, "-").toLowerCase()}.txt`,
-                                                t.value,
+                                                bodyText,
                                             )
                                         }
                                         data-testid="blueprint-download-btn"
@@ -260,9 +262,23 @@ const RichContent = ({ content, messageId }) => {
                                     </button>
                                 </div>
                             </div>
-                            <pre className="blueprint-body px-4 py-3 whitespace-pre-wrap">{t.value}</pre>
+                            {schemMatch && (
+                                <div className="px-3 pt-3">
+                                    <img
+                                        src={schemMatch[1]}
+                                        alt="drawn schematic"
+                                        className="w-full max-w-[540px] border border-[#4FA3FF]/30"
+                                        data-testid="blueprint-schematic-img"
+                                    />
+                                    <div className="text-[8px] font-mono text-[#4FA3FF] mt-1 tracking-widest uppercase">
+                                        schematic drawn by self-grown engine · 0 credits
+                                    </div>
+                                </div>
+                            )}
+                            <pre className="blueprint-body px-4 py-3 whitespace-pre-wrap">{bodyText}</pre>
                         </div>
                     );
+                }
                 if (t.type === "synth-image")
                     return (
                         <div
