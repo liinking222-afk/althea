@@ -41,6 +41,26 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-23 — Iteration 36 (THIS SESSION) — Direct Cognition (zero-LLM) + PWA any-device support
+- **Direct Cognition mode**: Althea no longer depends on the LLM. `extractive_answer()` in
+  web_access.py searches the live web, reads top pages, and extracts the most relevant prose
+  sentences (term-overlap^1.5 scoring, position bonus, min-overlap gate, nav-junk filter) with
+  cited sources — ZERO LLM calls. Per-session mode in `althea_settings` (key mode:{session}):
+  `/mode direct` = every reply zero-LLM from live internet; `/mode hybrid` (default) = LLM + uplink.
+  Endpoints: POST /api/chat/mode, GET /api/chat/mode/{session_id}. Header badge DIRECT·0-LLM.
+- **Resilient fallback chain**: on LLM budget-exhaustion or errors, chat now tries the live-web
+  extractive answer BEFORE the canned local core (`_zero_llm_reply()` in chat.py).
+- **Multi-provider uplink**: DuckDuckGo started 202-challenging this pod — web_search() now chains
+  DDG → Bing HTML (with base64 redirect-URL decoding) → Wikipedia REST (never blocks).
+- **Any-device PWA**: manifest.json + service worker (app-shell cache, network-first, /api always
+  live) + PIL-generated lattice icons (192/512) + apple/mobile meta tags + SW registration in
+  index.js. Althea is now installable on phones/tablets/desktops from the browser.
+- **Testing**: self-tested E2E — direct chat answers with real sourced facts (Everest 8,848.86 m via
+  Britannica; telephone Bell/Meucci/Reis via Wikipedia+BBC), badge toggle verified in browser,
+  SW registered (1), manifest/sw/icons all HTTP 200. Fixed en route: chat.py decorator syntax error,
+  Bing redirect decoding, nav-menu junk in sentence splitter.
+
+
 ### 2026-08-23 — Iteration 35 (THIS SESSION) — Transfer-Learning Specialization (from user's infographic)
 - User shared a transfer-learning infographic ("Pre-trained Althea → freeze layers → new head →
   Specialized Althea"). Implemented as a REAL self-grown module `transfer-learning`

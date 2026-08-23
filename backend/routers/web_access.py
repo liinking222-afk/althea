@@ -14,6 +14,7 @@ call that already happens, so grounding costs nothing extra.
 """
 from __future__ import annotations
 
+import base64
 import logging
 import re
 from datetime import datetime, timezone
@@ -119,6 +120,67 @@ async def web_search(query: str, limit: int = 6) -> List[dict]:
                         break
             if results:
                 break
+
+    # fallback 2: Bing HTML (tolerates this pod when DDG challenges)
+    if not results:
+        try:
+            async with httpx.AsyncClient(
+                timeout=12.0, follow_redirects=True,
+                headers={"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"},
+            ) as cx:
+                r = await cx.get(f"https://www.bing.com/search?q={quote(q)}")
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+                for li in soup.select("li.b_algo"):
+                    a = li.select_one("h2 a")
+                    if not a:
+                        continue
+                    href = a.get("href", "")
+                    if "bing.com/ck/" in href:
+                        qs = parse_qs(urlparse(href).query)
+                        u = (qs.get("u") or [""])[0]
+                        if u.startswith("a1"):
+                            pad = u[2:] + "=" * (-len(u[2:]) % 4)
+                            try:
+                                href = base64.urlsafe_b64decode(pad).decode(
+                                    "utf-8", "ignore")
+                            except Exception:
+                                continue
+                    if not href.startswith("http") or "bing.com" in urlparse(href).netloc:
+                        continue
+                    snip = li.select_one(".b_caption p") or li.select_one("p")
+                    results.append({
+                        "title": a.get_text(" ", strip=True),
+                        "url": href,
+                        "snippet": (snip.get_text(" ", strip=True) if snip else "")[:300],
+                    })
+                    if len(results) >= limit:
+                        break
+        except httpx.RequestError:
+            pass
+
+    # fallback 3: Wikipedia REST search (keyless, never blocks)
+    if not results:
+        try:
+            async with httpx.AsyncClient(
+                timeout=10.0, headers={"User-Agent": UA},
+            ) as cx:
+                r = await cx.get(
+                    "https://en.wikipedia.org/w/rest.php/v1/search/page",
+                    params={"q": q, "limit": min(limit, 8)},
+                )
+            for p in (r.json().get("pages") or []):
+                excerpt = BeautifulSoup(
+                    p.get("excerpt") or "", "html.parser").get_text(" ", strip=True)
+                results.append({
+                    "title": p.get("title", ""),
+                    "url": f"https://en.wikipedia.org/wiki/{quote(p.get('key', ''))}",
+                    "snippet": excerpt[:300],
+                })
+                if len(results) >= limit:
+                    break
+        except (httpx.RequestError, ValueError):
+            pass
     return results[:limit]
 
 
@@ -157,6 +219,88 @@ async def fetch_readable(url: str) -> dict:
         "title": title, "text": text, "links": links,
         "host": urlparse(final_url).hostname,
     }
+
+
+# ---------- zero-LLM extractive answering ----------
+STOPWORDS = set(
+    "the a an and or of to in on for is are was were be been being i you it "
+    "this that with as at by from about into over under what who whom when "
+    "where how why which whose do does did can could should would will shall "
+    "me my your its his her their our us we they he she them him tell give "
+    "show please currently right now today".split()
+)
+
+
+def _split_sentences(text: str):
+    out = []
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        for p in re.split(r"(?<=[.!?])\s+", line):
+            p = p.strip()
+            # real prose only: enough length AND enough words
+            if 40 <= len(p) <= 420 and len(p.split()) >= 7:
+                out.append(p)
+    return out
+
+
+async def extractive_answer(query: str, max_sentences: int = 5) -> Optional[dict]:
+    """ZERO-LLM answering: search the live web, read the top pages, and
+    extract the sentences most relevant to the query (term-overlap scoring
+    with a position bonus). Returns {answer, sources} or None."""
+    q_terms = {
+        w for w in re.findall(r"[a-z0-9]+", (query or "").lower())
+        if w not in STOPWORDS and len(w) > 2
+    }
+    if not q_terms:
+        return None
+    results = await web_search(query, limit=5)
+    if not results:
+        return None
+    scored, sources = [], []
+    min_overlap = 2 if len(q_terms) >= 3 else 1
+    for res in results[:2]:
+        page = await fetch_readable(res["url"])
+        if not page.get("ok") or not page.get("text"):
+            continue
+        sources.append({"title": res["title"],
+                        "url": page.get("final_url") or res["url"]})
+        for pos, s in enumerate(_split_sentences(page["text"])[:140]):
+            terms = set(re.findall(r"[a-z0-9]+", s.lower()))
+            overlap = len(q_terms & terms)
+            if overlap < min_overlap:
+                continue
+            score = (overlap ** 1.5) / (len(q_terms) ** 0.5) \
+                + max(0.0, 1.0 - pos / 140) * 0.4
+            scored.append((score, s))
+    if not scored:
+        for res in results[:3]:
+            if res.get("snippet"):
+                scored.append((0.1, res["snippet"]))
+                sources.append({"title": res["title"], "url": res["url"]})
+    if not scored:
+        return None
+    scored.sort(key=lambda x: -x[0])
+    picks, seen = [], set()
+    for _, s in scored:
+        key = s[:64]
+        if key in seen:
+            continue
+        seen.add(key)
+        picks.append(s)
+        if len(picks) >= max_sentences:
+            break
+    dedup_sources = []
+    seen_urls = set()
+    for s in sources:
+        if s["url"] not in seen_urls:
+            seen_urls.add(s["url"])
+            dedup_sources.append(s)
+    await _log(f"[UPLINK extractive] '{query[:100]}' → {len(picks)} sentences",
+               ["uplink", "extractive"])
+    return {"answer": "\n".join(f"· {s}" for s in picks),
+            "sources": dedup_sources[:3], "query": query}
 
 
 # ---------- the in-band uplink hook (called by chat.py) ----------

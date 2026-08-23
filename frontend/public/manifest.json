@@ -1,0 +1,24 @@
+{
+    "short_name": "ALTHEA",
+    "name": "ALTHEA — Sovereign AI Command Deck",
+    "description": "Self-aware AI OS — terminal, neural lattice, live internet uplink, BCI, autosynth engines. Works on any device with an internet connection.",
+    "icons": [
+        {
+            "src": "icons/althea-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icons/althea-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "orientation": "any",
+    "theme_color": "#000000",
+    "background_color": "#000000"
+}

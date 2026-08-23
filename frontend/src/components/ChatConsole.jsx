@@ -48,6 +48,14 @@ const ChatConsole = ({
     const [historyIdx, setHistoryIdx] = useState(-1);
     const [grownSlugs, setGrownSlugs] = useState([]);
     const [suggestion, setSuggestion] = useState("");
+    const [cogMode, setCogMode] = useState("hybrid");
+
+    useEffect(() => {
+        if (!sessionId) return;
+        axios.get(`${API}/chat/mode/${sessionId}`)
+            .then((r) => setCogMode(r.data.mode))
+            .catch(() => {});
+    }, [sessionId]);
     const scrollRef = useRef(null);
     const recogRef = useRef(null);
     const inputRef = useRef(null);
@@ -515,6 +523,26 @@ const ChatConsole = ({
                     lines.push("  no geometric passes above threshold in the next 24h");
                 }
                 pushSystem(lines.join("\n"), ["ORBITAL"]);
+            } else if (cmd === "/mode") {
+                const m = rest.trim().toLowerCase();
+                if (m !== "direct" && m !== "hybrid") {
+                    pushSystem(
+                        `[MODE] cognition mode is ${cogMode.toUpperCase()} · usage: /mode direct|hybrid\n` +
+                        `  direct — ZERO LLM · answers extracted live from the internet (0 credits)\n` +
+                        `  hybrid — LLM reasoning grounded by the live uplink`,
+                        ["MODE"],
+                    );
+                } else {
+                    await axios.post(`${API}/chat/mode`, { session_id: sessionId, mode: m });
+                    setCogMode(m);
+                    pushSystem(
+                        `[MODE] cognition mode set to ${m.toUpperCase()}` +
+                        (m === "direct"
+                            ? " — zero-LLM · live-internet extraction · 0 credits per message"
+                            : " — LLM reasoning + uplink grounding"),
+                        ["MODE"],
+                    );
+                }
             } else if (cmd === "/specialize") {
                 const domain = rest.trim() || "medical-diagnostics";
                 pushSystem(`[TRANSFER] specializing Althea for "${domain}" — pretrain → freeze → new head → fine-tune…`, ["TRANSFER"]);
@@ -1428,6 +1456,17 @@ const ChatConsole = ({
                         data-testid="terminal-version"
                     >
                         v5.0 apex
+                    </span>
+                    <span
+                        data-testid="cog-mode-badge"
+                        title="cognition mode — /mode direct|hybrid"
+                        className={`label text-[8px] px-1.5 py-0.5 border tracking-widest uppercase ${
+                            cogMode === "direct"
+                                ? "border-[#CCFF00]/60 text-[#CCFF00]"
+                                : "border-white/15 text-[#777]"
+                        }`}
+                    >
+                        {cogMode === "direct" ? "direct·0-llm" : "hybrid"}
                     </span>
                 </div>
                 <div className="flex items-center gap-2">

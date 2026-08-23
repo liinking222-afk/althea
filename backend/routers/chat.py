@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
 from models import (
@@ -23,11 +24,32 @@ from system_prompt import ALTHEA_SYSTEM_PROMPT
 from utils import build_context_block, next_node_id, semantic_recall
 from local_core import local_reply, sanitize_reply
 from routers.synthesis import inband_autosynth_hook, render_blueprint_schematic
-from routers.web_access import inband_web_uplink
+from routers.web_access import inband_web_uplink, extractive_answer
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 router = APIRouter()
+
+
+async def _zero_llm_reply(message, mem_docs, context, reason):
+    """Answer WITHOUT any LLM: live-internet extractive answer first,
+    procedural local core as last resort. Returns (text, used_web)."""
+    extract = None
+    try:
+        extract = await extractive_answer(message)
+    except Exception:
+        logging.exception("extractive answer failed")
+    if extract and extract.get("answer"):
+        src_lines = "\n".join(
+            f"  {i + 1}. {s['title']} — {s['url']}"
+            for i, s in enumerate(extract["sources"])
+        )
+        text = (
+            "[DIRECT COGNITION — zero-LLM · extracted live from the internet]\n"
+            f"{extract['answer']}\n\nsources:\n{src_lines}"
+        )
+        return text, True
+    return local_reply(message, mem_docs, context, reason=reason), False
 
 
 @router.get("/")
@@ -124,14 +146,28 @@ async def chat(req: ChatRequest):
     except Exception:
         transcript_block = ""
 
+    # Cognition mode — 'hybrid' (LLM grounded by uplink) or 'direct'
+    # (ZERO LLM: extractive answers straight from the live internet).
+    mode = "hybrid"
+    try:
+        setting = await db.althea_settings.find_one(
+            {"key": f"mode:{session_id}"}, {"_id": 0}
+        )
+        if setting and setting.get("value") in ("direct", "hybrid"):
+            mode = setting["value"]
+    except Exception:
+        pass
+
     # Live Internet Uplink — if the operator's message implies a lookup or
     # contains a URL, reach the open web NOW and fold live data into the
-    # same single LLM call (zero extra credits).
+    # same single LLM call (zero extra credits). Skipped in direct mode —
+    # the extractive engine does its own fetching.
     uplink_block = None
-    try:
-        uplink_block = await inband_web_uplink(req.message)
-    except Exception:
-        logging.exception("web uplink hook failed")
+    if mode != "direct":
+        try:
+            uplink_block = await inband_web_uplink(req.message)
+        except Exception:
+            logging.exception("web uplink hook failed")
 
     ctx_block = build_context_block(req.context)
     system_prompt = ALTHEA_SYSTEM_PROMPT
@@ -147,11 +183,16 @@ async def chat(req: ChatRequest):
     reply_text = ""
     tags: List[str] = []
 
-    if not EMERGENT_LLM_KEY:
-        reply_text = local_reply(
-            req.message, mem_docs, req.context or {}, reason="offline",
+    if mode == "direct":
+        reply_text, used_web = await _zero_llm_reply(
+            req.message, mem_docs, req.context or {}, "direct",
         )
-        tags = ["OFFLINE", "LOCAL-CORE"]
+        tags = ["DIRECT", "ZERO-LLM"] + (["UPLINK"] if used_web else ["LOCAL-CORE"])
+    elif not EMERGENT_LLM_KEY:
+        reply_text, used_web = await _zero_llm_reply(
+            req.message, mem_docs, req.context or {}, "offline",
+        )
+        tags = ["OFFLINE"] + (["DIRECT", "UPLINK"] if used_web else ["LOCAL-CORE"])
     else:
         try:
             chat_client = LlmChat(
@@ -169,18 +210,20 @@ async def chat(req: ChatRequest):
         except Exception as e:
             if is_budget_exceeded(e):
                 logging.warning(
-                    "chat: emergent llm key budget exceeded — routing through local core"
+                    "chat: emergent llm key budget exceeded — routing through direct cognition"
                 )
-                reply_text = local_reply(
-                    req.message, mem_docs, req.context or {}, reason="budget",
+                reply_text, used_web = await _zero_llm_reply(
+                    req.message, mem_docs, req.context or {}, "budget",
                 )
-                tags = ["BUDGET-EXHAUSTED", "LOCAL-CORE"]
+                tags = ["BUDGET-EXHAUSTED"] + (
+                    ["DIRECT", "UPLINK"] if used_web else ["LOCAL-CORE"])
             else:
                 logging.exception("althea chat failure")
-                reply_text = local_reply(
-                    req.message, mem_docs, req.context or {}, reason="error",
+                reply_text, used_web = await _zero_llm_reply(
+                    req.message, mem_docs, req.context or {}, "error",
                 )
-                tags = ["DEGRADED", "LOCAL-CORE"]
+                tags = ["DEGRADED"] + (
+                    ["DIRECT", "UPLINK"] if used_web else ["LOCAL-CORE"])
 
     # Document forge guard — auto-close unbalanced [LETTER]/[BLUEPRINT
     # markers (model truncation or forgetfulness) so the terminal always
@@ -250,6 +293,32 @@ async def chat(req: ChatRequest):
         timestamp=althea_msg.timestamp.isoformat(),
         tags=tags,
     )
+
+
+class ModeRequest(BaseModel):
+    session_id: str
+    mode: str
+
+
+@router.post("/chat/mode")
+async def set_chat_mode(req: ModeRequest):
+    if req.mode not in ("direct", "hybrid"):
+        raise HTTPException(status_code=400, detail="mode must be direct|hybrid")
+    await db.althea_settings.update_one(
+        {"key": f"mode:{req.session_id}"},
+        {"$set": {"key": f"mode:{req.session_id}", "value": req.mode,
+                  "updated": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"session_id": req.session_id, "mode": req.mode}
+
+
+@router.get("/chat/mode/{session_id}")
+async def get_chat_mode(session_id: str):
+    doc = await db.althea_settings.find_one(
+        {"key": f"mode:{session_id}"}, {"_id": 0}
+    )
+    return {"session_id": session_id, "mode": (doc or {}).get("value", "hybrid")}
 
 
 @router.get("/chat/history/{session_id}", response_model=List[ChatMessage])
