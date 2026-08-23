@@ -23,6 +23,7 @@ from routers import (  # noqa: E402
     images,
     lattice,
     memory,
+    neural_interface,
     notifications,
     observe,
     perception,
@@ -30,6 +31,7 @@ from routers import (  # noqa: E402
     server_ops,
     synthesis,
     system,
+    web_access,
     web_bridge,
     workers,
 )
@@ -59,6 +61,8 @@ api_router.include_router(diagnostics.router)
 api_router.include_router(images.router)
 api_router.include_router(workers.router)
 api_router.include_router(synthesis.router)
+api_router.include_router(web_access.router)
+api_router.include_router(neural_interface.router)
 
 app.include_router(api_router)
 

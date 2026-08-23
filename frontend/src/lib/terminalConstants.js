@@ -5,6 +5,7 @@
 export const STATIC_SLASH = [
     "/help", "/banner", "/clear", "/status", "/diagnose", "/troubleshoot", "/repair", "/consolidate",
     "/workers", "/cores", "/sweep", "/kick", "/synthesize", "/autosynth", "/gaps",
+    "/web", "/search", "/fetch", "/uplink", "/neural", "/bci", "/decode",
     "/imagine", "/draw", "/visualize", "/capabilities", "/system",
     "/memory", "/remember", "/forget", "/clear-memory",
     "/recall", "/concepts",
@@ -30,6 +31,11 @@ export const ASCII_BANNER = `
 // Tag → color mapping for terminal output (bracketed [TAG] prefixes)
 export const TAG_COLOR = {
     INSIGHT: "#00E5FF",
+    AUTOSYNTH: "#CCFF00",
+    UPLINK: "#00E5FF",
+    NEURAL: "#A29BFE",
+    BCI: "#A29BFE",
+    "AUTOSYNTH-INVOKE": "#CCFF00",
     GROWTH: "#FF2A88",
     GROWN: "#FF2A88",
     ERR: "#FF2A2A",
@@ -108,6 +114,11 @@ export const HELP_TEXT =
     "/synthesize        detect a capability gap in dialogue & grow it (add 'force' to skip check)\n" +
     "/gaps              preview which capability gaps recent dialogue exposes\n" +
     "/imagine <prompt>  ask gemini to draw an image inline (math, physics, diagrams)\n" +
+    "/web <query>       live keyless internet search (uplink)\n" +
+    "/fetch <url>       fetch + read any live web page\n" +
+    "/uplink            probe internet connectivity\n" +
+    "/neural            show ANIP/1.0 BCI protocol descriptor\n" +
+    "/decode [state]    acquire synthetic EEG and decode it (rest|focus|drowsy|motor-left|motor-right)\n" +
     "/clear             wipe terminal scrollback\n" +
     "/capabilities      list all subsystems\n" +
     "/zoom in|out|reset zoom neural lattice\n" +

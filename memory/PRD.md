@@ -41,6 +41,40 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-23 — Iteration 30 (THIS SESSION) — Uplink + ANIP/1.0 Neural Interface + In-band Autosynth
+- **P0 fix**: `pip freeze > requirements.txt` — matplotlib 3.11.1 + deps now pinned (deploy-safe).
+- **In-band capability invocation** (`synthesis.py: inband_autosynth_hook`) — chat messages like
+  "plot 3 7 2 9" auto-invoke Althea's self-grown matplotlib module and append
+  `[AUTOSYNTH-INVOKE /slug]` + `[SYNTH-IMAGE:<png data-url>]` to her reply (tag AUTOSYNTH).
+  Also fires for fractal/mandelbrot (ASCII) and fft/fourier (DFT magnitudes). Zero LLM cost;
+  `_ensure_capability` re-materializes module files if the disk was wiped (prod redeploy safe).
+  MessageRow renders SYNTH-IMAGE directly (no Gemini call → no credits).
+- **Live Internet Uplink** (`routers/web_access.py`) — keyless DuckDuckGo search + readable page
+  fetch. `inband_web_uplink` detects lookup intent / URLs in chat and injects live web context
+  into the SAME LLM call (tag UPLINK, zero extra credits). Endpoints: POST /api/web/search,
+  POST /api/web/fetch, GET /api/web/status. Terminal: /web /search /fetch /uplink.
+  System prompt updated: Althea never claims to lack internet access. Honest scope: egress is
+  server-side (pod network), not literally the operator's device NIC.
+- **Neural Interface Protocol ANIP/1.0** (`routers/neural_interface.py` + `neural_substrate.py`):
+  - Verifiable substrate: Hopfield lattice-energy (monotone-energy invariant checked at runtime),
+    LIF differential propagation (membrane bounds / refractory / dt-stability checks),
+    true multi-head transformer fusion (softmax row sums, layernorm stats). Every run emits a
+    sha256 checksum.
+  - Real BCI decoding: byte-accurate EDF/EDF+ parser (16-bit LE, physical scaling), Welch PSD
+    band powers (δ/θ/α/β/γ), Quiroga MAD spike detection (σ=median|x|/0.6745, 4.5σ), rule-based
+    state decoder incl. C3/C4 beta-ERD motor imagery (gated on beta dominance — bug found+fixed).
+  - Synthetic physiological EEG generator (5 states) since no electrodes attach to the server;
+    real recordings enter via EDF upload or JSON frames.
+  - Endpoints: /api/neural/{protocol,synthetic,decode,edf/parse,sessions} +
+    /api/neural/substrate/{lattice-energy,propagate,fuse}. Sessions logged to `neural_sessions`.
+  - New NEURAL-LINK center tab (`NeuralInterfaceScreen.jsx`): waveform canvas + spike markers,
+    band-power bars, attention heatmap, verification checklist, energy sparkline, EDF upload.
+  - Terminal: /neural /bci /decode [state].
+- **Testing**: testing_agent iteration_18 — backend 24/24 PASS, frontend 100% (BCI flows, all 3
+  substrate engines, 4 slash commands, chat autosynth with inline SYNTH-IMAGE). Pytest suite at
+  /app/backend/tests/test_iter18.py.
+
+
 ### 2026-02 — Iteration 1-13
 - Backend endpoints: /api/health, /api/chat, /api/chat/history/{id}, DELETE /api/chat/{id}, /api/introspect, /api/neural-state
 - Mongo persistence (UUID ids, ISO datetimes, no _id leak)

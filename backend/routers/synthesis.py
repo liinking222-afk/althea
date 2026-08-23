@@ -446,6 +446,131 @@ async def synthesize_capability_from_dialogue(
     }
 
 
+# ---------- in-band invocation (zero LLM cost) ----------
+NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
+INBAND_SIGNALS = [
+    (re.compile(r"\b(plot|graph|chart)\b", re.IGNORECASE), "data-visualization",
+        "matplotlib", "Render numerical data as a chart on demand."),
+    (re.compile(r"\b(fractal|mandelbrot|julia)\b", re.IGNORECASE), "fractal-render",
+        "generative-art", "Compute and render a fractal region."),
+    (re.compile(r"\b(fft|fourier|spectral)\b", re.IGNORECASE), "spectral-analysis",
+        "signals", "Compute the FFT / spectral profile of a signal."),
+]
+
+
+def _load_and_run(slug: str, args=None, kwargs=None) -> dict:
+    """Load a synthesized module from disk (re-scanning it) and call run()."""
+    path = GROWN_CODE_DIR / f"{slug}.py"
+    if not path.exists():
+        return {"ok": False, "error": "module_file_missing"}
+    code = path.read_text(encoding="utf-8")
+    scan = safe_code_scan(code)
+    if not scan["safe"]:
+        return {"ok": False, "error": "blocked_by_safe_scan"}
+    import importlib.util
+    try:
+        spec = importlib.util.spec_from_file_location(slug, str(path))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        fn = getattr(module, "run", None)
+        if not callable(fn):
+            return {"ok": False, "error": "module_has_no_run"}
+        return {"ok": True, "result": fn(*(args or []), **(kwargs or {}))}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:200]}
+
+
+async def _ensure_capability(slug_prefix: str, category: str,
+                             description: str, session_id) -> Optional[str]:
+    """Return the slug of a ready-to-run capability, growing it if missing."""
+    docs = await db.althea_capabilities.find(
+        {"slug": {"$regex": f"^autonomous-{re.escape(slug_prefix)}-"}},
+        {"_id": 0, "slug": 1},
+    ).sort("timestamp", -1).to_list(5)
+    for d in docs:
+        if (GROWN_CODE_DIR / f"{d['slug']}.py").exists():
+            return d["slug"]
+    if docs:
+        slug = docs[0]["slug"]
+        code = _draft_code(
+            slug_prefix, slug_prefix.replace("-", " ").title(),
+            category, "rematerialized for in-band invocation",
+        )
+        if safe_code_scan(code)["safe"]:
+            GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+            (GROWN_CODE_DIR / f"{slug}.py").write_text(code, encoding="utf-8")
+            return slug
+        return None
+    res = await synthesize_capability_from_dialogue(
+        session_id=session_id, hint=slug_prefix.replace("-", " "),
+    )
+    return res.get("slug") if res.get("synthesized") else None
+
+
+async def inband_autosynth_hook(user_message: str, session_id) -> Optional[tuple]:
+    """Detect an invokable request in the operator's message, ensure the
+    matching self-grown capability exists, run it, and return
+    (reply_block, slug) — or None if nothing fired. Zero LLM calls."""
+    text = user_message or ""
+    nums = [float(n) for n in NUM_RE.findall(text)][:64]
+    for rx, prefix, category, desc in INBAND_SIGNALS:
+        if not rx.search(text):
+            continue
+        if prefix == "data-visualization":
+            if len(nums) < 2:
+                continue
+            slug = await _ensure_capability(prefix, category, desc, session_id)
+            if not slug:
+                return None
+            out = _load_and_run(slug, [nums], {"title": "operator data"})
+            r = out.get("result") if out.get("ok") else None
+            if r and r.get("ok"):
+                await db.althea_capabilities.update_one(
+                    {"slug": slug}, {"$inc": {"invocations": 1}},
+                )
+                block = (
+                    f"\n\n[AUTOSYNTH-INVOKE /{slug}] self-grown module executed"
+                    f" — {r['n_points']} points rendered locally (0 credits)"
+                    f"\n[SYNTH-IMAGE:{r['data_url']}]"
+                )
+                return block, slug
+        elif prefix == "fractal-render":
+            slug = await _ensure_capability(prefix, category, desc, session_id)
+            if not slug:
+                return None
+            out = _load_and_run(slug)
+            r = out.get("result") if out.get("ok") else None
+            if r and r.get("ok"):
+                await db.althea_capabilities.update_one(
+                    {"slug": slug}, {"$inc": {"invocations": 1}},
+                )
+                block = (
+                    f"\n\n[AUTOSYNTH-INVOKE /{slug}] self-grown fractal engine"
+                    f" executed locally (0 credits)\n```\n{r['art']}\n```"
+                )
+                return block, slug
+        elif prefix == "spectral-analysis":
+            if len(nums) < 4:
+                continue
+            slug = await _ensure_capability(prefix, category, desc, session_id)
+            if not slug:
+                return None
+            out = _load_and_run(slug, [nums])
+            r = out.get("result") if out.get("ok") else None
+            if r and r.get("ok"):
+                await db.althea_capabilities.update_one(
+                    {"slug": slug}, {"$inc": {"invocations": 1}},
+                )
+                mags = ", ".join(f"{m:.2f}" for m in r["magnitude"][:16])
+                block = (
+                    f"\n\n[AUTOSYNTH-INVOKE /{slug}] self-grown DFT executed"
+                    f" locally (0 credits) — n={r['n']}\n```\n|X(k)| = [{mags}]\n```"
+                )
+                return block, slug
+    return None
+
+
 # ---------- HTTP api ----------
 @router.post("/synthesize/from-dialogue")
 async def synthesize_from_dialogue(req: SynthesizeRequest):

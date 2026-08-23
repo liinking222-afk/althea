@@ -1,0 +1,49 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+# ALTHEA Memory Pattern Frequency Analyzer
+# Pragmatic grep-and-count for evolution tracking
+
+my %patterns;
+my %categories;
+my $total = 0;
+
+while (<STDIN>) {
+    chomp;
+    
+    # Duck-type detection: if it quacks like a pattern log...
+    if (m{\[(GROWTH|AUTOSYNTH|EVO|IMAGINED)\s+([^\]]+)\]}) {
+        my ($cat, $rest) = ($1, $2);
+        
+        # Extract pattern name - flexible matching
+        my $pattern = 'unknown';
+        if ($rest =~ m{/autonomous-([a-z0-9-]+)}) {
+            $pattern = $1;
+        } elsif ($rest =~ m{#\d+\s+(\w+)\s+v}) {
+            $pattern = lc($1);
+        } elsif ($rest =~ m{^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*\(}) {
+            $pattern = lc($1 =~ s/\s+/-/gr);
+        }
+        
+        $patterns{$pattern}++;
+        $categories{$cat}++;
+        $total++;
+    }
+}
+
+# Output: human-readable AND machine-parseable
+print "TOTAL: $total\n\n";
+
+print "BY CATEGORY:\n";
+for my $cat (sort { $categories{$b} <=> $categories{$a} } keys %categories) {
+    printf "  %-12s %4d  %s\n", $cat, $categories{$cat}, 
+           '#' x int(40 * $categories{$cat} / $total);
+}
+
+print "\nTOP PATTERNS:\n";
+my @top = (sort { $patterns{$b} <=> $patterns{$a} } keys %patterns)[0..9];
+for my $p (@top) {
+    last unless defined $patterns{$p};
+    printf "  %-30s %3d\n", $p, $patterns{$p};
+}

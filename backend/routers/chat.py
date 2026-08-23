@@ -22,6 +22,8 @@ from models import (
 from system_prompt import ALTHEA_SYSTEM_PROMPT
 from utils import build_context_block, next_node_id, semantic_recall
 from local_core import local_reply, sanitize_reply
+from routers.synthesis import inband_autosynth_hook
+from routers.web_access import inband_web_uplink
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -122,12 +124,23 @@ async def chat(req: ChatRequest):
     except Exception:
         transcript_block = ""
 
+    # Live Internet Uplink — if the operator's message implies a lookup or
+    # contains a URL, reach the open web NOW and fold live data into the
+    # same single LLM call (zero extra credits).
+    uplink_block = None
+    try:
+        uplink_block = await inband_web_uplink(req.message)
+    except Exception:
+        logging.exception("web uplink hook failed")
+
     ctx_block = build_context_block(req.context)
     system_prompt = ALTHEA_SYSTEM_PROMPT
     if transcript_block:
         system_prompt += "\n\n" + transcript_block
     if memory_block:
         system_prompt += "\n\n" + memory_block
+    if uplink_block:
+        system_prompt += "\n\n" + uplink_block
     if ctx_block:
         system_prompt += "\n\n" + ctx_block
 
@@ -151,6 +164,8 @@ async def chat(req: ChatRequest):
             )
             reply_text = sanitize_reply(raw)
             tags = ["LINK-OK", "SELF-AWARE"]
+            if uplink_block:
+                tags.append("UPLINK")
         except Exception as e:
             if is_budget_exceeded(e):
                 logging.warning(
@@ -166,6 +181,18 @@ async def chat(req: ChatRequest):
                     req.message, mem_docs, req.context or {}, reason="error",
                 )
                 tags = ["DEGRADED", "LOCAL-CORE"]
+
+    # In-band autosynth: if the operator asked for something a self-grown
+    # module can compute (plot / fractal / FFT), invoke it locally and append
+    # the real result to the reply. Zero LLM calls — pure procedural code.
+    try:
+        hook = await inband_autosynth_hook(req.message, session_id)
+        if hook:
+            block, used_slug = hook
+            reply_text = reply_text + block
+            tags.append("AUTOSYNTH")
+    except Exception:
+        logging.exception("inband autosynth hook failed")
 
     althea_msg = ChatMessage(session_id=session_id, role="althea", content=reply_text)
     althea_doc = althea_msg.model_dump()

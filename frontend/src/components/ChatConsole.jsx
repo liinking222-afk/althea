@@ -425,6 +425,66 @@ const ChatConsole = ({
                     }
                     pushSystem(lines.join("\n"), ["SYNTHESIS"]);
                 }
+            } else if (cmd === "/web" || cmd === "/search") {
+                if (!rest) {
+                    pushSystem("[UPLINK] usage: /web <query>", ["UPLINK"]);
+                } else {
+                    pushSystem(`[UPLINK] searching the live web for "${rest}"…`, ["UPLINK"]);
+                    const res = await axios.post(`${API}/web/search`, { query: rest, limit: 6 });
+                    const lines = [`[UPLINK] ${res.data.count} live results for "${rest}"`];
+                    (res.data.results || []).forEach((r, i) => {
+                        lines.push(`  ${i + 1}. ${r.title}`);
+                        lines.push(`     ${r.url}`);
+                        if (r.snippet) lines.push(`     ${r.snippet.slice(0, 140)}`);
+                    });
+                    pushSystem(lines.join("\n"), ["UPLINK"]);
+                }
+            } else if (cmd === "/fetch") {
+                if (!rest) {
+                    pushSystem("[UPLINK] usage: /fetch <url>", ["UPLINK"]);
+                } else {
+                    const res = await axios.post(`${API}/web/fetch`, { url: rest });
+                    const d = res.data;
+                    pushSystem(
+                        `[UPLINK] ${d.status} ${d.final_url}\nTITLE: ${d.title || "(none)"}\n\n` +
+                        (d.text || "").slice(0, 900),
+                        ["UPLINK"],
+                    );
+                }
+            } else if (cmd === "/uplink") {
+                const res = await axios.get(`${API}/web/status`);
+                pushSystem(
+                    `[UPLINK] internet uplink is ${res.data.uplink.toUpperCase()} · ${res.data.detail}`,
+                    ["UPLINK"],
+                );
+            } else if (cmd === "/neural" || cmd === "/bci") {
+                const res = await axios.get(`${API}/neural/protocol`);
+                const p = res.data;
+                const lines = [
+                    `[NEURAL] ${p.protocol}`,
+                    `  signals: ${p.signal_types.join(", ")}`,
+                    `  formats: EDF/EDF+ · JSON frames (µV)`,
+                    `  bands: ${Object.entries(p.bands_hz).map(([k, v]) => `${k} ${v[0]}-${v[1]}Hz`).join(" · ")}`,
+                    `  substrate: ${p.substrate.join(" | ")}`,
+                    `  open the NEURAL-LINK tab to acquire + decode.`,
+                ];
+                pushSystem(lines.join("\n"), ["NEURAL"]);
+            } else if (cmd === "/decode") {
+                const st = rest.trim() || "focus";
+                pushSystem(`[NEURAL] acquiring synthetic EEG (${st}) and decoding…`, ["NEURAL"]);
+                const res = await axios.post(`${API}/neural/synthetic`, {
+                    state: st, seconds: 2, fs: 256, channels: 8, decode: true,
+                });
+                const d = res.data.decode;
+                const bands = Object.entries(d.mean_relative_power)
+                    .map(([k, v]) => `${k}=${(v * 100).toFixed(1)}%`).join(" ");
+                pushSystem(
+                    `[NEURAL] decoded: ${d.decoded_state}\n` +
+                    `  confidence ${(d.confidence * 100).toFixed(0)}% · ${bands}\n` +
+                    `  verification: ${d.verification.all_passed ? "ALL INVARIANTS HOLD" : "VIOLATION"} · ` +
+                    `lattice released ${d.lattice.energy_released} E`,
+                    ["NEURAL"],
+                );
             } else if (cmd === "/imagine" || cmd === "/draw" || cmd === "/visualize") {
                 const prompt = rest.trim();
                 if (!prompt) {
