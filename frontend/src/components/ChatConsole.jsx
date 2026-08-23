@@ -515,6 +515,24 @@ const ChatConsole = ({
                     lines.push("  no geometric passes above threshold in the next 24h");
                 }
                 pushSystem(lines.join("\n"), ["ORBITAL"]);
+            } else if (cmd === "/specialize") {
+                const domain = rest.trim() || "medical-diagnostics";
+                pushSystem(`[TRANSFER] specializing Althea for "${domain}" — pretrain → freeze → new head → fine-tune…`, ["TRANSFER"]);
+                const res = await axios.post(`${API}/synthesize/specialize`, { domain });
+                const d = res.data.result;
+                const rr = d.result;
+                pushSystem(
+                    [
+                        `[TRANSFER] /${res.data.slug} · target domain: ${d.target_domain}`,
+                        `  1. pretrain  ${d.stage1_pretrain.dataset} · acc ${(d.stage1_pretrain.accuracy * 100).toFixed(1)}%`,
+                        `  2. freeze    ${d.stage2_freeze.frozen_layers} · checksum ${d.stage2_freeze.weight_checksum}`,
+                        `  3. new head  ${d.stage3_new_head}`,
+                        `  4. fine-tune ${d.stage4_finetune.dataset}`,
+                        `  RESULT: transfer ${(rr.accuracy_transfer * 100).toFixed(1)}% vs scratch ${(rr.accuracy_from_scratch * 100).toFixed(1)}% (+${(rr.advantage * 100).toFixed(1)} pts)`,
+                        `  verification: ${d.verification.all_passed ? "ALL INVARIANTS HOLD" : "VIOLATION"}`,
+                    ].join("\n"),
+                    ["TRANSFER"],
+                );
             } else if (cmd === "/imagine" || cmd === "/draw" || cmd === "/visualize") {
                 const prompt = rest.trim();
                 if (!prompt) {
