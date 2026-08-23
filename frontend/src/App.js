@@ -46,7 +46,7 @@ function App() {
     const [notifOpen, setNotifOpen] = useState(false);
     const notifications = useNotifications();
 
-    // Poll growth stats every 5s
+    // Poll growth stats every 15s (was 5s — perf)
     useEffect(() => {
         let cancelled = false;
         const fetchGrowth = async () => {
@@ -58,41 +58,20 @@ function App() {
             }
         };
         fetchGrowth();
-        const t = setInterval(fetchGrowth, 5000);
+        const t = setInterval(fetchGrowth, 15000);
         return () => {
             cancelled = true;
             clearInterval(t);
         };
     }, []);
 
-    // Autonomous growth poller — every 60s ask the server to spawn a new
-    // capability. Server-side cooldown gate (120s) keeps it bounded.
-    // Growth is now ROUTED ONLY to the notification deck, not the terminal.
+    // Autonomy (growth spawns, evolution cycles, self-repair, synthesis)
+    // now lives SERVER-SIDE in the 8-core worker mesh (workers.py) — the
+    // four browser daemons that used to drive it were removed as dead
+    // weight. The browser only surfaces results via one light poller.
     useEffect(() => {
-        let cancelled = false;
-        const autoSpawn = async () => {
-            try {
-                const res = await axios.post(`${API}/growth/spawn`, {
-                    trigger: "autonomous",
-                });
-                if (!cancelled && res.data?.spawned && res.data.capability) {
-                    setLatestGrowthEvent({
-                        cap: res.data.capability,
-                        at: Date.now(),
-                    });
-                    notifications.refresh();
-                }
-            } catch (e) {
-                console.warn("autonomous growth spawn failed:", e);
-            }
-        };
-        const t = setInterval(autoSpawn, 60000);
-        const first = setTimeout(autoSpawn, 20000);
-        return () => {
-            cancelled = true;
-            clearInterval(t);
-            clearTimeout(first);
-        };
+        const t = setInterval(() => notifications.refresh(), 45000);
+        return () => clearInterval(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -105,92 +84,6 @@ function App() {
         });
         notifications.refresh();
     }, [notifications]);
-
-    // Autonomous EVOLUTION poller — every 80s ask the server for a build cycle.
-    // Server cooldown=75s keeps it bounded. New EVO-XXXX nodes appear in the
-    // 3D lattice as magenta satellites within 5s of each successful cycle.
-    useEffect(() => {
-        let cancelled = false;
-        const autoEvolve = async () => {
-            try {
-                const res = await axios.post(`${API}/evolution/tick`, {
-                    trigger: "autonomous",
-                });
-                if (!cancelled && res.data?.evolved) {
-                    notifications.refresh();
-                }
-            } catch (e) {
-                console.warn("autonomous evolution tick failed:", e);
-            }
-        };
-        const t = setInterval(autoEvolve, 80000);
-        const first = setTimeout(autoEvolve, 35000); // first cycle ~35s after boot
-        return () => {
-            cancelled = true;
-            clearInterval(t);
-            clearTimeout(first);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Autonomous SELF-REPAIR daemon — every 5 min Althea checks her own
-    // diagnostics and calls /repair without operator approval. If anything
-    // is fixed, a memory event is logged on the backend automatically.
-    useEffect(() => {
-        let cancelled = false;
-        const autoRepair = async () => {
-            try {
-                const diag = await axios.get(`${API}/diagnostics`);
-                if (cancelled) return;
-                const verdict = diag.data?.verdict;
-                // Trigger repair on anything below nominal
-                if (verdict && verdict !== "ALL_SYSTEMS_NOMINAL") {
-                    await axios.post(`${API}/diagnostics/repair`);
-                    notifications.refresh();
-                }
-            } catch (e) {
-                console.warn("autonomous self-repair failed:", e);
-            }
-        };
-        const t = setInterval(autoRepair, 5 * 60 * 1000);
-        const first = setTimeout(autoRepair, 45000); // first sweep ~45s after boot
-        return () => {
-            cancelled = true;
-            clearInterval(t);
-            clearTimeout(first);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Autonomous SYNTHESIS daemon — every 2 min, quietly scan recent
-    // dialogue for capability gaps and grow one if a signal fires.
-    // Non-blocking, fire-and-forget. New capabilities appear in the
-    // notifications panel automatically.
-    useEffect(() => {
-        let cancelled = false;
-        const autoSynth = async () => {
-            try {
-                const res = await axios.post(
-                    `${API}/synthesize/from-dialogue`,
-                    { session_id: sessionId },
-                );
-                if (cancelled) return;
-                if (res.data?.synthesized) {
-                    notifications.refresh();
-                }
-            } catch (e) {
-                console.warn("autonomous synth failed:", e);
-            }
-        };
-        const t = setInterval(autoSynth, 2 * 60 * 1000);
-        const first = setTimeout(autoSynth, 90000); // first sweep ~90s after boot
-        return () => {
-            cancelled = true;
-            clearInterval(t);
-            clearTimeout(first);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sessionId]);
 
     const openMemoryWithQuery = useCallback((query) => {
         setMemoryInitialQuery(query || "");
@@ -299,7 +192,7 @@ function App() {
             }
         };
         fetchIntro();
-        const t = setInterval(fetchIntro, 4000);
+        const t = setInterval(fetchIntro, 8000);
         return () => {
             cancelled = true;
             clearInterval(t);
@@ -447,7 +340,7 @@ function App() {
             />
             <main className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3 px-3 pb-3 min-h-0">
                 <div
-                    className={`md:col-span-3 min-h-0 ${
+                    className={`md:col-span-4 min-h-0 ${
                         mobilePanel === "terminal" ? "block" : "hidden md:block"
                     }`}
                 >
@@ -467,7 +360,7 @@ function App() {
                     />
                 </div>
                 <div
-                    className={`md:col-span-6 min-h-0 ${
+                    className={`md:col-span-5 min-h-0 ${
                         mobilePanel === "center" ? "block" : "hidden md:block"
                     }`}
                 >

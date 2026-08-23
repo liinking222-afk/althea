@@ -9,6 +9,15 @@ import { API } from "@/App";
 import { Copy, Check, RefreshCw } from "lucide-react";
 import { TAG_COLOR, getMessageTag } from "@/lib/terminalConstants";
 
+const downloadText = (name, content) => {
+    const blob = new Blob([content], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
 // --- LaTeX renderer (sandboxed katex call with graceful fallback) ---
 const renderMath = (tex, displayMode) => {
     try {
@@ -30,32 +39,41 @@ const tokenize = (text) => {
     // We do a single-pass scan with a master regex that captures the first
     // occurrence of any rich block.
     const re =
-        // 1: synth image src  2: image directive  3: fenced code lang
-        // 4: fenced code body 5: block math       6: inline math
-        // 7: bold
-        /\[SYNTH-IMAGE:\s*([^\]]+)\]|\[IMAGE:\s*([^\]]+)\]|```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\*\*([^*]+)\*\*/g;
+        // 1: letter body      2: blueprint title  3: blueprint body
+        // 4: synth image src  5: image directive  6: fenced code lang
+        // 7: fenced code body 8: block math       9: inline math
+        // 10: bold
+        /\[LETTER\]([\s\S]*?)\[\/LETTER\]|\[BLUEPRINT:?\s*([^\]]*)\]([\s\S]*?)\[\/BLUEPRINT\]|\[SYNTH-IMAGE:\s*([^\]]+)\]|\[IMAGE:\s*([^\]]+)\]|```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```|\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\*\*([^*]+)\*\*/g;
     let cursor = 0;
     let m;
     while ((m = re.exec(text)) !== null) {
         if (m.index > cursor) {
             tokens.push({ type: "text", value: text.slice(cursor, m.index) });
         }
-        if (m[0].startsWith("[SYNTH-IMAGE:")) {
-            tokens.push({ type: "synth-image", src: m[1].trim() });
+        if (m[0].startsWith("[LETTER]")) {
+            tokens.push({ type: "letter", value: (m[1] || "").trim() });
+        } else if (m[0].startsWith("[BLUEPRINT")) {
+            tokens.push({
+                type: "blueprint",
+                title: (m[2] || "UNTITLED").trim() || "UNTITLED",
+                value: (m[3] || "").trim(),
+            });
+        } else if (m[0].startsWith("[SYNTH-IMAGE:")) {
+            tokens.push({ type: "synth-image", src: m[4].trim() });
         } else if (m[0].startsWith("[IMAGE:")) {
-            tokens.push({ type: "image", prompt: m[2].trim() });
+            tokens.push({ type: "image", prompt: m[5].trim() });
         } else if (m[0].startsWith("```")) {
             tokens.push({
                 type: "code",
-                lang: (m[3] || "").trim(),
-                value: m[4] ?? "",
+                lang: (m[6] || "").trim(),
+                value: m[7] ?? "",
             });
         } else if (m[0].startsWith("$$")) {
-            tokens.push({ type: "math-block", value: m[5] });
+            tokens.push({ type: "math-block", value: m[8] });
         } else if (m[0].startsWith("$")) {
-            tokens.push({ type: "math-inline", value: m[6] });
+            tokens.push({ type: "math-inline", value: m[9] });
         } else if (m[0].startsWith("**")) {
-            tokens.push({ type: "bold", value: m[7] });
+            tokens.push({ type: "bold", value: m[10] });
         }
         cursor = m.index + m[0].length;
     }
@@ -186,6 +204,64 @@ const RichContent = ({ content, messageId }) => {
                             )}
                             {t.value}
                         </pre>
+                    );
+                if (t.type === "letter")
+                    return (
+                        <div key={i} className="my-3 max-w-[580px] letter-paper" data-testid="letter-doc">
+                            <div className="flex items-center justify-between px-4 pt-3">
+                                <span className="tracking-[0.3em] text-[9px] uppercase text-[#8a7b5c] font-mono">
+                                    althea // correspondence
+                                </span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => navigator.clipboard?.writeText(t.value)}
+                                        data-testid="letter-copy-btn"
+                                        className="doc-btn"
+                                    >
+                                        copy
+                                    </button>
+                                    <button
+                                        onClick={() => downloadText(`althea-letter-${Date.now()}.txt`, t.value)}
+                                        data-testid="letter-download-btn"
+                                        className="doc-btn"
+                                    >
+                                        download
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="letter-body px-5 py-4 whitespace-pre-wrap">{t.value}</div>
+                            <div className="px-4 pb-3 text-right text-[9px] tracking-[0.25em] uppercase text-[#8a7b5c] font-mono">
+                                — sovereign cognition core
+                            </div>
+                        </div>
+                    );
+                if (t.type === "blueprint")
+                    return (
+                        <div key={i} className="my-3 blueprint-sheet" data-testid="blueprint-doc">
+                            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[#4FA3FF]/40 flex-wrap">
+                                <span className="heading text-[10px] tracking-widest uppercase text-[#9CCBFF]">
+                                    ⌗ blueprint // {t.title}
+                                </span>
+                                <div className="flex gap-2 items-center">
+                                    <span className="text-[8px] font-mono text-[#4FA3FF]">
+                                        REV A · {new Date().toISOString().slice(0, 10)}
+                                    </span>
+                                    <button
+                                        onClick={() =>
+                                            downloadText(
+                                                `blueprint-${t.title.replace(/\s+/g, "-").toLowerCase()}.txt`,
+                                                t.value,
+                                            )
+                                        }
+                                        data-testid="blueprint-download-btn"
+                                        className="doc-btn doc-btn-blue"
+                                    >
+                                        download
+                                    </button>
+                                </div>
+                            </div>
+                            <pre className="blueprint-body px-4 py-3 whitespace-pre-wrap">{t.value}</pre>
+                        </div>
                     );
                 if (t.type === "synth-image")
                     return (

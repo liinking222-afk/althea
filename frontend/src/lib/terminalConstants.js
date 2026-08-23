@@ -6,6 +6,7 @@ export const STATIC_SLASH = [
     "/help", "/banner", "/clear", "/status", "/diagnose", "/troubleshoot", "/repair", "/consolidate",
     "/workers", "/cores", "/sweep", "/kick", "/synthesize", "/autosynth", "/gaps",
     "/web", "/search", "/fetch", "/uplink", "/neural", "/bci", "/decode",
+    "/letter", "/blueprint",
     "/imagine", "/draw", "/visualize", "/capabilities", "/system",
     "/memory", "/remember", "/forget", "/clear-memory",
     "/recall", "/concepts",
@@ -35,6 +36,7 @@ export const TAG_COLOR = {
     UPLINK: "#00E5FF",
     NEURAL: "#A29BFE",
     BCI: "#A29BFE",
+    FORGE: "#E8D9A8",
     "AUTOSYNTH-INVOKE": "#CCFF00",
     GROWTH: "#FF2A88",
     GROWN: "#FF2A88",
@@ -119,6 +121,8 @@ export const HELP_TEXT =
     "/uplink            probe internet connectivity\n" +
     "/neural            show ANIP/1.0 BCI protocol descriptor\n" +
     "/decode [state]    acquire synthetic EEG and decode it (rest|focus|drowsy|motor-left|motor-right)\n" +
+    "/letter <purpose>  forge a formal letter rendered as paper (copy + download)\n" +
+    "/blueprint <thing> forge an engineering blueprint sheet (schematic + specs)\n" +
     "/clear             wipe terminal scrollback\n" +
     "/capabilities      list all subsystems\n" +
     "/zoom in|out|reset zoom neural lattice\n" +

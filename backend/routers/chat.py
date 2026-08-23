@@ -182,6 +182,16 @@ async def chat(req: ChatRequest):
                 )
                 tags = ["DEGRADED", "LOCAL-CORE"]
 
+    # Document forge guard — auto-close unbalanced [LETTER]/[BLUEPRINT
+    # markers (model truncation or forgetfulness) so the terminal always
+    # renders the rich document instead of raw markers.
+    if "[LETTER]" in reply_text and "[/LETTER]" not in reply_text:
+        reply_text += "\n[/LETTER]"
+    if "[BLUEPRINT" in reply_text and "[/BLUEPRINT]" not in reply_text:
+        reply_text += "\n[/BLUEPRINT]"
+    if "[LETTER]" in reply_text or "[BLUEPRINT" in reply_text:
+        tags.append("FORGE")
+
     # In-band autosynth: if the operator asked for something a self-grown
     # module can compute (plot / fractal / FFT), invoke it locally and append
     # the real result to the reply. Zero LLM calls — pure procedural code.

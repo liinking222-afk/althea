@@ -164,6 +164,34 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         );
         scene.add(particles);
 
+        // ---- LIVE SIGNAL PULSES — photons travelling the lattice edges ----
+        // A pool of glowing spheres lerping along random edges. On operator/
+        // AI activity (chat send/reply) the mesh visibly surges: faster,
+        // brighter, larger. Same visual style — just alive.
+        const PULSE_COUNT = 16;
+        const pulseGeom = new THREE.SphereGeometry(0.06, 8, 8);
+        const pulses = [];
+        for (let i = 0; i < PULSE_COUNT; i++) {
+            const mat = new THREE.MeshBasicMaterial({
+                color: i % 3 === 0 ? CYAN : ACCENT,
+                transparent: true,
+                opacity: 0.8,
+            });
+            const mesh = new THREE.Mesh(pulseGeom, mat);
+            mesh.userData = {
+                edge: edges[(Math.random() * edges.length) | 0],
+                p: Math.random(),
+                speed: 0.25 + Math.random() * 0.5,
+            };
+            group.add(mesh);
+            pulses.push(mesh);
+        }
+        let activityBoost = 0;
+        const onActivity = () => {
+            activityBoost = Math.min(activityBoost + 1.2, 3);
+        };
+        window.addEventListener("althea:activity", onActivity);
+
         // ---- Live cognitive lattice group (spawned nodes) ----
         // Cyan satellites that orbit the static yellow lattice. Rebuilt every
         // poll using node id as a deterministic seed for stable positions.
@@ -198,11 +226,26 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             );
         }
 
+        let lastLatticeSig = "";
+        let didAutoFit = false;
         async function refreshLattice() {
             try {
                 const res = await axios.get(`${API}/lattice/nodes`);
-                const nodes = res.data || [];
-                setLatticeCount(nodes.length);
+                const allNodes = res.data || [];
+                setLatticeCount(allNodes.length);
+                // Render only the most recent 500 satellites — the HUD count
+                // stays accurate, but the GPU and the operator's eyes are
+                // spared. At >60 nodes, auto-pull the camera back once so
+                // the lattice reads as a structure instead of a wall.
+                const nodes = allNodes.slice(-500);
+                if (!didAutoFit && allNodes.length > 60) {
+                    didAutoFit = true;
+                    zoomRef.current.target =
+                        22 + Math.min(allNodes.length / 150, 10);
+                }
+                const sig = nodes.length + ":" + nodes.map((n) => n.id).join(",");
+                if (sig === lastLatticeSig) return;
+                lastLatticeSig = sig;
                 disposeLatticeGroup();
                 const positions = new Map();
                 nodes.forEach((n, idx) => positions.set(n.id, nodePosition(n, idx)));
@@ -217,16 +260,19 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     const mat = new THREE.LineBasicMaterial({
                         color: CYAN,
                         transparent: true,
-                        opacity: 0.6,
+                        opacity: 0.28,
                     });
                     latticeGroup.add(new THREE.Line(geom, mat));
                 });
 
                 // node spheres — visible sphere + larger transparent pick mesh
-                const visibleGeom = new THREE.SphereGeometry(0.14, 12, 12);
-                const evoGeom = new THREE.SphereGeometry(0.22, 16, 16);
+                // Sized as ACCENTS so the core lattice stays the hero.
+                const visibleGeom = new THREE.SphereGeometry(0.09, 12, 12);
+                const evoGeom = new THREE.SphereGeometry(0.13, 16, 16);
                 const pickGeom = new THREE.SphereGeometry(0.5, 8, 8);
                 const EVO = 0xff2a88;
+                const evoIds = nodes.filter((n) => n.is_evolution).slice(-12)
+                    .map((n) => n.id);
                 nodes.forEach((n, idx) => {
                     const isEvo = !!n.is_evolution;
                     const nodeColor = isEvo ? EVO : CYAN;
@@ -249,9 +295,9 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     latticeGroup.add(mesh);
                     latticeMeshes.push(mesh);
 
-                    // EVO halo ring
-                    if (isEvo) {
-                        const ringGeom = new THREE.RingGeometry(0.35, 0.5, 24);
+                    // EVO halo ring — only on the 12 most recent evolutions
+                    if (isEvo && evoIds.includes(n.id)) {
+                        const ringGeom = new THREE.RingGeometry(0.2, 0.28, 24);
                         const ringMat = new THREE.MeshBasicMaterial({
                             color: EVO,
                             transparent: true,
@@ -410,6 +456,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         // Animate
         const clock = new THREE.Clock();
         let raf = 0;
+        let lastT = 0;
         let dragging = false;
         let lastX = 0;
         let lastY = 0;
@@ -517,6 +564,8 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         const animate = () => {
             raf = requestAnimationFrame(animate);
             const t = clock.getElapsedTime();
+            const dt = Math.min(t - lastT, 0.05);
+            lastT = t;
             // Smooth zoom toward target
             const zr = zoomRef.current;
             zr.z += (zr.target - zr.z) * 0.12;
@@ -534,8 +583,32 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                 const s = 0.16 + 0.06 * Math.sin(t * 1.8 + seed * 6);
                 m.scale.set(s * 4, s * 4, s * 4);
                 m.material.emissiveIntensity =
-                    0.7 + 0.5 * Math.sin(t * 2 + seed * 8);
+                    0.7 + 0.5 * Math.sin(t * 2 + seed * 8) + activityBoost * 0.5;
             });
+
+            // live signal pulses — travel edges, surge on activity
+            activityBoost = Math.max(0, activityBoost - dt * 0.8);
+            const speedMul = 1 + activityBoost * 2.2;
+            pulses.forEach((p) => {
+                const u = p.userData;
+                u.p += dt * u.speed * speedMul;
+                if (u.p >= 1) {
+                    u.p = 0;
+                    u.edge = edges[(Math.random() * edges.length) | 0];
+                    u.speed = 0.25 + Math.random() * 0.5;
+                }
+                p.position.lerpVectors(
+                    nodes[u.edge.from].position,
+                    nodes[u.edge.to].position,
+                    u.p,
+                );
+                const tw = 0.7 + 0.3 * Math.sin(t * 6 + u.p * 12);
+                p.material.opacity = Math.min(1, (0.55 + activityBoost * 0.3) * tw);
+                const sc = 1 + activityBoost * 0.8;
+                p.scale.set(sc, sc, sc);
+            });
+            core.material.opacity =
+                0.18 + activityBoost * 0.15 + 0.04 * Math.sin(t * 2.4);
 
             // animate lattice satellites (faster, larger pulse)
             latticeMeshes.forEach((m) => {
@@ -546,13 +619,13 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     return;
                 }
                 const { seed, activation, isEvo } = m.userData;
-                const base = isEvo ? 1.3 : 0.9;
-                const amp = isEvo ? 0.6 : 0.4;
+                const base = isEvo ? 1.0 : 0.8;
+                const amp = isEvo ? 0.3 : 0.22;
                 const s = base + amp * Math.sin(t * (isEvo ? 2.6 : 2.2) + seed * 9);
-                const scale = s * (0.8 + activation * 0.6);
+                const scale = s * (0.8 + activation * 0.4);
                 m.scale.set(scale, scale, scale);
                 m.material.emissiveIntensity =
-                    (isEvo ? 1.4 : 1.0) + 0.9 * Math.sin(t * 2.4 + seed * 11);
+                    (isEvo ? 1.2 : 0.9) + 0.6 * Math.sin(t * 2.4 + seed * 11);
             });
 
             // animate QUANTUM brain — yellow outer-shell with pink fire on recent firings
@@ -588,6 +661,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
         return () => {
             cancelAnimationFrame(raf);
             clearInterval(latticePoll);
+            window.removeEventListener("althea:activity", onActivity);
             window.removeEventListener("resize", onResize);
             window.removeEventListener("mouseup", onUp);
             window.removeEventListener("mousemove", onMove);

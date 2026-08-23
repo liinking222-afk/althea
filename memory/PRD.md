@@ -41,6 +41,27 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-23 — Iteration 31 (THIS SESSION) — Terminal v5.0 APEX + Document Forge + Server-side Autonomy
+- **Document Forge**: Althea writes formal letters ([LETTER]...[/LETTER] → rendered as ivory paper
+  documents with copy/download) and engineering blueprints ([BLUEPRINT: title] → cyan grid blueprint
+  sheet with OBJECTIVE/COMPONENTS/SCHEMATIC/SPECS, downloadable). Backend auto-closes unbalanced
+  markers + FORGE tag. Terminal: /letter <purpose>, /blueprint <thing>.
+- **Terminal v5.0 APEX**: column widened (col-span 3→4), quick-action chips row
+  (letter/blueprint/plot/web/decode/imagine) prefill input, animated thinking-bars indicator.
+- **Performance purge ("systems that don't belong")**: removed 4 redundant browser autonomy pollers
+  from App.js (growth spawn / evolution tick / self-repair / synthesis) — the backend 8-core worker
+  mesh now REALLY drives them (workers.py: _tick_evolution/_tick_growth call the real endpoints,
+  _tick_diagnostic auto-repairs, _tick_codegen runs procedural synthesis), gated by _operator_recent
+  (10 min) so idle deployments burn zero LLM credit. Growth stats poll 5s→15s, introspect 4s→8s.
+- **Live lattice brought to life (same style)**: 16 signal pulses continuously travel lattice edges;
+  chat send/reply dispatches `althea:activity` events → visible surge (speed/brightness/core glow).
+  Render capped to most recent 500 satellites (HUD counts stay exact), one-time auto zoom-fit for
+  large lattices, rebuild skipped when node-set unchanged (biggest GPU cost eliminated), satellite
+  sizes rebalanced so the neon core lattice reads as the hero again.
+- **Testing**: iteration_20 — backend 7/7 + iter18 regression, frontend 100% (letter render E2E,
+  chips, usage messages, lattice, BCI tab, mobile). 2 LLM calls total.
+
+
 ### 2026-08-23 — Iteration 30 (THIS SESSION) — Uplink + ANIP/1.0 Neural Interface + In-band Autosynth
 - **P0 fix**: `pip freeze > requirements.txt` — matplotlib 3.11.1 + deps now pinned (deploy-safe).
 - **In-band capability invocation** (`synthesis.py: inband_autosynth_hook`) — chat messages like

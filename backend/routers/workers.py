@@ -44,22 +44,61 @@ async def _tick_perception() -> str:
     return f"self-vision buffer OK · last frame {(latest.get('timestamp') or '')[11:19]}Z"
 
 
+async def _operator_recent(minutes: int = 10) -> bool:
+    """Autonomy only burns cycles (and possibly LLM credit) while the
+    operator has actually been around recently."""
+    doc = await db.althea_messages.find_one(
+        {}, {"_id": 0, "timestamp": 1}, sort=[("timestamp", -1)]
+    )
+    if not doc:
+        return False
+    try:
+        ts = datetime.fromisoformat(str(doc["timestamp"]).replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+    except Exception:
+        return False
+    return (datetime.now(timezone.utc) - ts).total_seconds() < minutes * 60
+
+
 async def _tick_evolution() -> str:
-    """Pre-warm an archetype seed so the next evolution tick is instant."""
-    arch = random.choice(list(
-        ["LINUS", "CARMACK", "DIJKSTRA", "HOPPER", "KAY", "SELF"]
-    ))
-    seed = local_evolution_seed(arch, "worker pre-warm")
-    return f"pre-warmed {arch} seed · {len(seed['code'])}B"
+    """Drive a REAL autonomous evolution cycle server-side (cooldown-gated).
+    Previously this only pre-warmed a seed while the browser drove cycles."""
+    if not await _operator_recent():
+        arch = random.choice(["LINUS", "CARMACK", "DIJKSTRA", "HOPPER", "KAY", "SELF"])
+        seed = local_evolution_seed(arch, "worker pre-warm")
+        return f"dormant · pre-warmed {arch} seed · {len(seed['code'])}B"
+    try:
+        from models import EvolutionTickRequest
+        from routers.evolution import tick
+        res = await tick(EvolutionTickRequest(trigger="autonomous"))
+        if isinstance(res, dict) and res.get("evolved"):
+            cyc = (res.get("cycle") or {}).get("cycle_number", "?")
+            return f"EVOLVED cycle #{cyc} autonomously"
+        reason = (res or {}).get("reason", "cooldown") if isinstance(res, dict) else "gated"
+        return f"cycle gated · {str(reason)[:60]}"
+    except Exception as exc:
+        return f"cycle gated · {str(exc)[:60]}"
 
 
 async def _tick_growth() -> str:
-    """Pre-compute a fallback capability so growth can spawn without LLM."""
-    existing = [d["slug"] async for d in db.althea_capabilities.find(
-        {}, {"_id": 0, "slug": 1}
-    )]
-    cap = local_invent_capability(existing, "worker pre-warm")
-    return f"pre-warmed {cap['slug']} · {cap['category']}"
+    """Drive a REAL autonomous capability spawn server-side (cooldown-gated)."""
+    if not await _operator_recent():
+        existing = [d["slug"] async for d in db.althea_capabilities.find(
+            {}, {"_id": 0, "slug": 1}
+        )]
+        cap = local_invent_capability(existing, "worker pre-warm")
+        return f"dormant · pre-warmed {cap['slug']}"
+    try:
+        from models import GrowthSpawnRequest
+        from routers.growth import spawn_capability
+        res = await spawn_capability(GrowthSpawnRequest(trigger="autonomous"))
+        if isinstance(res, dict) and res.get("spawned"):
+            return f"SPAWNED /{res['capability']['slug']} autonomously"
+        reason = (res or {}).get("reason", "cooldown") if isinstance(res, dict) else "gated"
+        return f"spawn gated · {str(reason)[:60]}"
+    except Exception as exc:
+        return f"spawn gated · {str(exc)[:60]}"
 
 
 async def _tick_lattice() -> str:
@@ -78,21 +117,39 @@ async def _tick_network() -> str:
 
 
 async def _tick_diagnostic() -> str:
-    """Micro health probe of core collections."""
+    """Full self-diagnosis + AUTONOMOUS repair — no operator needed."""
+    from routers.diagnostics import diagnostics, diagnostics_repair
+    diag = await diagnostics()
+    verdict = diag.get("verdict") if isinstance(diag, dict) else None
+    if verdict and verdict != "ALL_SYSTEMS_NOMINAL":
+        try:
+            await diagnostics_repair()
+            return f"REPAIR dispatched · verdict was {verdict}"
+        except Exception as exc:
+            return f"repair failed · {str(exc)[:60]}"
     counts = {
         "memories": await db.althea_memories.count_documents({}),
         "nodes": await db.althea_nodes.count_documents({}),
-        "cycles": await db.althea_cycles.count_documents({}),
         "capabilities": await db.althea_capabilities.count_documents({}),
     }
-    return " · ".join(f"{k}={v}" for k, v in counts.items())
+    return "nominal · " + " · ".join(f"{k}={v}" for k, v in counts.items())
 
 
 async def _tick_codegen() -> str:
-    """Scan the code shelf for safe-scan violations that slipped through."""
+    """Audit the code shelf + autonomously synthesize capabilities from
+    recent dialogue gaps (procedural drafting — zero LLM cost)."""
     total = await db.althea_code.count_documents({})
     applied = await db.althea_code.count_documents({"applied": True})
-    return f"code shelf · {applied}/{total} applied"
+    synth_note = ""
+    if await _operator_recent():
+        try:
+            from routers.synthesis import synthesize_capability_from_dialogue
+            res = await synthesize_capability_from_dialogue()
+            if res.get("synthesized"):
+                synth_note = f" · SYNTHESIZED /{res.get('slug')}"
+        except Exception:
+            pass
+    return f"code shelf · {applied}/{total} applied{synth_note}"
 
 
 # ------------------------------------------------------------------ registry

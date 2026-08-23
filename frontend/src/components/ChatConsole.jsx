@@ -1169,7 +1169,7 @@ const ChatConsole = ({
     };
 
     const send = async (textOverride) => {
-        const text = (textOverride ?? input).trim();
+        let text = (textOverride ?? input).trim();
         if (!text || sending) return;        // Track in command history regardless of slash/natural
         setHistory((h) => {
             if (h[0] === text) return h;
@@ -1177,6 +1177,32 @@ const ChatConsole = ({
         });
         setHistoryIdx(-1);
         setSuggestion("");
+
+        // DOCUMENT FORGE — /letter and /blueprint route through the LLM with
+        // a forge directive so the reply comes back wrapped for rich rendering.
+        if (text.startsWith("/letter")) {
+            const rest = text.slice(7).trim();
+            if (!rest) {
+                setInput("");
+                pushSystem(
+                    "[FORGE] usage: /letter <recipient + purpose>  — e.g. /letter to the city council requesting rooftop solar funding",
+                    ["FORGE"],
+                );
+                return;
+            }
+            text = `Compose a complete formal letter: ${rest}`;
+        } else if (text.startsWith("/blueprint")) {
+            const rest = text.slice(10).trim();
+            if (!rest) {
+                setInput("");
+                pushSystem(
+                    "[FORGE] usage: /blueprint <thing to design>  — e.g. /blueprint a solar-powered surveillance drone",
+                    ["FORGE"],
+                );
+                return;
+            }
+            text = `Create a full technical blueprint: ${rest}`;
+        }
 
         if (text.startsWith("/")) {
             setInput("");
@@ -1193,6 +1219,7 @@ const ChatConsole = ({
         };
         setMessages((m) => [...m, userMsg]);
         setInput("");
+        window.dispatchEvent(new CustomEvent("althea:activity", { detail: { kind: "send" } }));
 
         if (!online) {
             const reply = offlineReply(text);
@@ -1232,6 +1259,7 @@ const ChatConsole = ({
                     tags: res.data.tags,
                 },
             ]);
+            window.dispatchEvent(new CustomEvent("althea:activity", { detail: { kind: "reply" } }));
             speak(res.data.reply);
         } catch (e) {
             const reply = offlineReply(text);
@@ -1351,7 +1379,7 @@ const ChatConsole = ({
                         className="label text-[9px] text-[#666]"
                         data-testid="terminal-version"
                     >
-                        v4.0 sovereign
+                        v5.0 apex
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1450,10 +1478,39 @@ const ChatConsole = ({
                         />
                     ))}
                 {sending && (
-                    <div className="text-[11px] text-[#888] caret">
+                    <div className="flex items-center gap-2 text-[11px] text-[#888]" data-testid="thinking-indicator">
+                        <span className="think-bars"><span /><span /><span /><span /><span /></span>
                         althea reasoning
                     </div>
                 )}
+            </div>
+
+            {/* quick-action forge chips */}
+            <div
+                className="px-3 pt-1.5 pb-0.5 flex gap-1.5 flex-wrap items-center"
+                data-testid="terminal-quick-actions"
+            >
+                {[
+                    ["letter", "/letter "],
+                    ["blueprint", "/blueprint "],
+                    ["plot", "plot "],
+                    ["web", "/web "],
+                    ["decode", "/decode focus"],
+                    ["imagine", "/imagine "],
+                ].map(([label, fill]) => (
+                    <button
+                        key={label}
+                        type="button"
+                        data-testid={`chip-${label}`}
+                        className="term-chip"
+                        onClick={() => {
+                            setInput(fill);
+                            inputRef.current?.focus();
+                        }}
+                    >
+                        {label}
+                    </button>
+                ))}
             </div>
 
             <form
