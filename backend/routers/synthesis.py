@@ -59,6 +59,10 @@ GAP_SIGNALS = [
     (r"\bsatellit|orbital|\btle\b|\biss\b|space station|starlink",
         "orbital-propagation", "astronomy-navigation",
         "Propagate satellite orbits from TLE (SGP4) and predict passes."),
+    (r"\bgravitational wave|casimir|vacuum energy|cosmic coherence|chirp mass",
+        "cosmic-coherence", "astrophysics",
+        "Compute real GW inspiral, Casimir vacuum pressure and "
+        "phase-coherence observables."),
 ]
 
 
@@ -403,6 +407,99 @@ def run(tle_line1, tle_line2, observer_lat=51.4779, observer_lon=-0.0015,
         "track_sample": track,
     }
 ''',
+    "cosmic-coherence": '''import hashlib
+import json
+import math
+
+import numpy as np
+import scipy.constants as const
+
+M_SUN = 1.98892e30
+MPC = 3.0856775814913673e22
+
+
+def _checksum(payload):
+    blob = json.dumps(payload, sort_keys=True, default=str).encode()
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def run(mode="chirp", m1=30.0, m2=30.0, distance_mpc=400.0,
+        gap_nm=100.0, signals=None):
+    """Universal Coherence Engine — REAL physics only, self-verifying.
+    chirp:     compact-binary inspiral observables (Newtonian-order).
+    casimir:   vacuum-fluctuation (Casimir) pressure between plates.
+    coherence: pairwise phase-coherence matrix of signals.
+    Honest scope: gravitational waves cannot be modulated by vacuum
+    coupling — this computes the real observables instead."""
+    G, c, hbar = const.G, const.c, const.hbar
+    if mode == "casimir":
+        a = max(float(gap_nm), 1.0) * 1e-9
+        pressure = -(math.pi ** 2) * hbar * c / (240.0 * a ** 4)
+        out = {"ok": True, "mode": "casimir", "gap_nm": float(gap_nm),
+               "pressure_pa": pressure,
+               "force_per_cm2_n": pressure * 1e-4,
+               "law": "P = -pi^2 hbar c / (240 a^4)"}
+        checks = [
+            {"name": "attractive(P<0)", "passed": pressure < 0},
+            {"name": "scales_inverse_4th_power",
+             "passed": abs(pressure / (-(math.pi ** 2) * hbar * c /
+                           (240.0 * (2 * a) ** 4)) - 16.0) < 1e-6},
+        ]
+    elif mode == "coherence":
+        X = np.asarray(
+            signals if signals is not None
+            else np.random.default_rng(7).normal(size=(3, 256)), float)
+        ph = np.angle(np.fft.rfft(X, axis=1))
+        n = X.shape[0]
+        C = np.ones((n, n))
+        for i in range(n):
+            for j in range(n):
+                C[i, j] = abs(np.mean(np.exp(1j * (ph[i] - ph[j]))))
+        out = {"ok": True, "mode": "coherence", "n_signals": int(n),
+               "matrix": [[round(float(v), 4) for v in row] for row in C]}
+        checks = [
+            {"name": "coherence_in_0_1",
+             "passed": bool(np.all((C >= 0) & (C <= 1.0 + 1e-9)))},
+            {"name": "self_coherence_1",
+             "passed": bool(np.allclose(np.diag(C), 1.0, atol=1e-9))},
+        ]
+    else:
+        ma = max(float(m1), 0.1) * M_SUN
+        mb = max(float(m2), 0.1) * M_SUN
+        M = ma + mb
+        mc = (ma * mb) ** 0.6 / M ** 0.2
+        d = max(float(distance_mpc), 0.001) * MPC
+        f_isco = c ** 3 / (6 ** 1.5 * math.pi * G * M)
+        h_peak = (4.0 * (G * mc) ** (5.0 / 3.0)
+                  * (math.pi * f_isco) ** (2.0 / 3.0) / (c ** 4 * d))
+        f_low = 30.0
+        tau = (5.0 * c ** 5 / (256.0 * (math.pi * f_low) ** (8.0 / 3.0)
+               * (G * mc) ** (5.0 / 3.0)))
+        ts_ = np.linspace(0.0, max(tau - 1e-4, 1e-4), 64)
+        freq = ((1.0 / math.pi)
+                * (5.0 / (256.0 * np.maximum(tau - ts_, 1e-6))) ** 0.375
+                * (G * mc / c ** 3) ** (-0.625))
+        stride = max(1, len(freq) // 16)
+        out = {"ok": True, "mode": "chirp",
+               "m1_msun": float(m1), "m2_msun": float(m2),
+               "distance_mpc": float(distance_mpc),
+               "chirp_mass_msun": round(mc / M_SUN, 4),
+               "f_isco_hz": round(f_isco, 2),
+               "peak_strain_h": h_peak,
+               "seconds_in_band_from_30hz": round(tau, 3),
+               "freq_track_hz": [round(float(f), 2) for f in freq[::stride]],
+               "note": "Newtonian-order inspiral observables (LIGO band)"}
+        checks = [
+            {"name": "strain_below_1e-16", "passed": h_peak < 1e-16},
+            {"name": "f_isco_positive", "passed": f_isco > 0},
+            {"name": "chirp_monotonic_up",
+             "passed": bool(np.all(np.diff(freq) >= -1e-9))},
+        ]
+    out["verification"] = {"checks": checks,
+                           "all_passed": all(ck["passed"] for ck in checks),
+                           "checksum": _checksum(out)}
+    return out
+''',
 }
 
 
@@ -609,6 +706,11 @@ INBAND_SIGNALS = [
                 re.IGNORECASE), "orbital-propagation",
         "astronomy-navigation",
         "Propagate satellite orbits from TLE (SGP4) and predict passes."),
+    (re.compile(r"\b(gravitational wave|casimir|vacuum energy|chirp mass|"
+                r"coherence matrix)\b", re.IGNORECASE), "cosmic-coherence",
+        "astrophysics",
+        "Compute real GW inspiral, Casimir vacuum pressure and "
+        "phase-coherence observables."),
 ]
 
 
@@ -752,6 +854,52 @@ async def inband_autosynth_hook(user_message: str, session_id) -> Optional[tuple
                     {"slug": slug}, {"$inc": {"invocations": 1}},
                 )
                 return _format_orbital_block(slug, r), slug
+        elif prefix == "cosmic-coherence":
+            slug = await _ensure_capability(prefix, category, desc, session_id)
+            if not slug:
+                return None
+            low = text.lower()
+            if "casimir" in low or "vacuum energy" in low:
+                kwargs = {"mode": "casimir",
+                          "gap_nm": nums[0] if nums else 100.0}
+            elif "coherence matrix" in low:
+                kwargs = {"mode": "coherence"}
+            else:
+                kwargs = {"mode": "chirp",
+                          "m1": nums[0] if len(nums) > 0 else 30.0,
+                          "m2": nums[1] if len(nums) > 1 else 30.0,
+                          "distance_mpc": nums[2] if len(nums) > 2 else 400.0}
+            out = _load_and_run(slug, [], kwargs)
+            r = out.get("result") if out.get("ok") else None
+            if r and r.get("ok"):
+                await db.althea_capabilities.update_one(
+                    {"slug": slug}, {"$inc": {"invocations": 1}},
+                )
+                v = r["verification"]
+                if r["mode"] == "casimir":
+                    body = (f"Casimir vacuum pressure @ {r['gap_nm']} nm gap: "
+                            f"{r['pressure_pa']:.4e} Pa (attractive)\n"
+                            f"law: {r['law']}")
+                elif r["mode"] == "coherence":
+                    body = ("phase-coherence matrix "
+                            f"({r['n_signals']} signals):\n"
+                            + "\n".join(str(row) for row in r["matrix"]))
+                else:
+                    body = (f"binary {r['m1_msun']}+{r['m2_msun']} M_sun @ "
+                            f"{r['distance_mpc']} Mpc\n"
+                            f"chirp mass {r['chirp_mass_msun']} M_sun · "
+                            f"f_ISCO {r['f_isco_hz']} Hz\n"
+                            f"peak strain h ~ {r['peak_strain_h']:.3e} · "
+                            f"{r['seconds_in_band_from_30hz']}s in LIGO band "
+                            f"from 30 Hz")
+                block = (
+                    f"\n\n[AUTOSYNTH-INVOKE /{slug}] Universal Coherence "
+                    f"Engine — real physics (0 credits)\n```\n{body}\n"
+                    f"verification: "
+                    f"{'ALL INVARIANTS HOLD' if v['all_passed'] else 'VIOLATION'}"
+                    f" · checksum {v['checksum']}\n```"
+                )
+                return block, slug
     return None
 
 
