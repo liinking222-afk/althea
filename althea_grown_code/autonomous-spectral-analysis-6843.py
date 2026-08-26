@@ -1,6 +1,6 @@
 """AUTOSYNTH — Spectral Analysis
 Category: signals
-Generated: 2026-08-23T06:34:03.941959+00:00
+Generated: 2026-08-26T06:47:23.961945+00:00
 Rationale: Detected in recent dialogue: 'spectral-analysis' pattern surfaced multiple times.
 
 Executable capability wired into ALTHEA's lattice by

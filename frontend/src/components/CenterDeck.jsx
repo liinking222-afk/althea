@@ -48,6 +48,7 @@ const TABS = [
 const CenterDeck = ({
     tab,
     setTab,
+    sessionId,
     introspection,
     observationUrl,
     setObservationUrl,
@@ -121,8 +122,8 @@ const CenterDeck = ({
                     </div>
                 )}
                 {tab === "connect" && (
-                    <div className="absolute inset-0">
-                        <ConnectScreen />
+                    <div className="absolute inset-0 overflow-hidden">
+                        <ConnectScreen sessionId={sessionId} />
                     </div>
                 )}
                 {tab === "server" && (

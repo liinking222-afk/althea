@@ -20,6 +20,28 @@ def build_context_block(context: Optional[dict]) -> str:
         lines.append(f"granted_permissions=[{perms or 'none'}]")
     if "battery" in context:
         lines.append(f"battery={context['battery']}")
+    if context.get("device"):
+        d = context["device"]
+        parts = []
+        if d.get("platform"):
+            parts.append(f"platform={d['platform']}")
+        if d.get("ua_mobile") is not None:
+            parts.append("form=mobile" if d["ua_mobile"] else "form=desktop")
+        if d.get("battery"):
+            parts.append(f"battery={d['battery']}")
+        if d.get("network"):
+            parts.append(f"net={d['network']}")
+        if d.get("geo"):
+            g = d["geo"]
+            if g.get("lat") is not None:
+                parts.append(f"loc={g['lat']:.4f},{g['lon']:.4f}")
+        if d.get("orientation"):
+            o = d["orientation"]
+            parts.append(f"tilt={o.get('tilt_fb')}/{o.get('tilt_lr')}")
+        if d.get("camera"):
+            parts.append(f"camera={d['camera']}")
+        if parts:
+            lines.append("device[" + " ".join(parts) + "]")
     if context.get("observation"):
         obs = context["observation"]
         url = obs.get("url") or "none"

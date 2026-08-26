@@ -41,6 +41,24 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-26 — Iteration 38 (THIS SESSION) — Phone Bridge + Autopilot fix + device-aware chat
+- **Autopilot organic-result fix**: Bing /ck/ redirect URLs now base64-decoded, ad/tracker links
+  skipped, real organic result clicked (verified: pizza → A Couple Cooks recipe with real findings).
+- **Phone Bridge** (`DeviceBridge.jsx`, mounted top of ConnectScreen): connects Althea to the
+  phone's REAL hardware via permission-based web APIs — one-tap PWA install (beforeinstallprompt
+  captured in index.js), live GPS (watchPosition), battery, network, motion/orientation (iOS
+  permission flow), microphone→voice-control (SpeechRecognition dispatches althea:voice →
+  ChatConsole auto-sends), notifications, vibration/haptics, rear camera preview+snapshot. Honest
+  boundary banner: no SMS/other-app access, no unlimited background — browser-sandboxed.
+- **Unrestrained 0-token mode**: prominent toggle in the bridge = the direct zero-LLM cognition
+  mode; two-way live sync with the terminal badge via althea:mode events.
+- **Device-aware chat**: window.__althea_device telemetry (platform/battery/network/geo/orientation)
+  sent in chat context; build_context_block renders a device[...] line; system prompt DEVICE
+  AWARENESS section. Verified: Althea reads iPhone/64%-charging/4G and resolves GPS to NYC.
+- **Testing**: self-tested — autopilot E2E, device-aware chat E2E, Phone Bridge UI screenshot
+  (install/mode/GPS/battery/network/voice/camera all render, GPS lock 40.71,-74.00).
+
+
 ### 2026-08-26 — Iteration 37 (THIS SESSION) — Live-Drive Browser (user's Playwright design, adapted)
 - User pasted a Playwright+WebSocket browser-streaming design. Implemented as
   `routers/live_browser.py`: real headless Chromium (playwright==1.62.0, executable discovery:

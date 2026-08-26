@@ -2,10 +2,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Wifi, Bluetooth, Usb, Plug, Radio, Trash2, ShieldAlert, Apple, Terminal } from "lucide-react";
 import { API } from "@/App";
+import DeviceBridge from "@/components/DeviceBridge";
 
 const SECURITY_OPTIONS = ["WPA2", "WPA3", "WPA", "WEP", "OPEN"];
 
-const ConnectScreen = () => {
+const ConnectScreen = ({ sessionId }) => {
     const [telemetry, setTelemetry] = useState(null);
     const [profiles, setProfiles] = useState([]);
     const [ssid, setSsid] = useState("");
@@ -181,6 +182,8 @@ const ConnectScreen = () => {
             className="h-full overflow-y-auto althea-scroll px-4 py-3 space-y-4"
             data-testid="connect-screen"
         >
+            <DeviceBridge sessionId={sessionId} />
+
             {/* Honesty banner */}
             <div className="flex items-start gap-2 border border-[#FFAA00]/40 bg-[#FFAA00]/5 px-3 py-2">
                 <ShieldAlert size={14} className="text-[#FFAA00] mt-0.5 shrink-0" />

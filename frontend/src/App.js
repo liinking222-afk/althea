@@ -367,6 +367,7 @@ function App() {
                     <CenterDeck
                         tab={centerTab}
                         setTab={setCenterTab}
+                        sessionId={sessionId}
                         introspection={introspection}
                         observationUrl={observationUrl}
                         setObservationUrl={watchUrl}

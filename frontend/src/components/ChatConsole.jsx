@@ -55,6 +55,9 @@ const ChatConsole = ({
         axios.get(`${API}/chat/mode/${sessionId}`)
             .then((r) => setCogMode(r.data.mode))
             .catch(() => {});
+        const h = (e) => e.detail?.mode && setCogMode(e.detail.mode);
+        window.addEventListener("althea:mode", h);
+        return () => window.removeEventListener("althea:mode", h);
     }, [sessionId]);
     const scrollRef = useRef(null);
     const recogRef = useRef(null);
@@ -163,6 +166,16 @@ const ChatConsole = ({
         speechSynthesis.cancel();
         speechSynthesis.speak(u);
     };
+
+    // Load history once
+    useEffect(() => {
+        const onVoice = (e) => {
+            const t = e.detail?.text;
+            if (t && !sending) send(t);
+        };
+        window.addEventListener("althea:voice", onVoice);
+        return () => window.removeEventListener("althea:voice", onVoice);
+    });
 
     // Load history once
     useEffect(() => {
@@ -523,6 +536,23 @@ const ChatConsole = ({
                     lines.push("  no geometric passes above threshold in the next 24h");
                 }
                 pushSystem(lines.join("\n"), ["ORBITAL"]);
+            } else if (cmd === "/pilot") {
+                if (!rest) {
+                    pushSystem("[AUTOPILOT] usage: /pilot <goal> — e.g. /pilot cheapest flight from NYC to London", ["AUTOPILOT"]);
+                } else {
+                    pushSystem(`[AUTOPILOT] taking the wheel — "${rest}" · watch me in BROWSER → DRIVE`, ["AUTOPILOT"]);
+                    const res = await axios.post(`${API}/live/autopilot`, { goal: rest });
+                    const d = res.data;
+                    const lines = [`[AUTOPILOT] goal complete · 0 credits`];
+                    d.log.forEach((l) => lines.push(`  > ${l}`));
+                    lines.push(`  LANDED: ${d.landed_title || "(untitled)"}`);
+                    lines.push(`          ${d.landed_url}`);
+                    if (d.findings?.length) {
+                        lines.push("  FINDINGS:");
+                        d.findings.forEach((f) => lines.push(`    · ${f}`));
+                    }
+                    pushSystem(lines.join("\n"), ["AUTOPILOT"]);
+                }
             } else if (cmd === "/mode") {
                 const m = rest.trim().toLowerCase();
                 if (m !== "direct" && m !== "hybrid") {
@@ -535,6 +565,7 @@ const ChatConsole = ({
                 } else {
                     await axios.post(`${API}/chat/mode`, { session_id: sessionId, mode: m });
                     setCogMode(m);
+                    window.dispatchEvent(new CustomEvent("althea:mode", { detail: { mode: m } }));
                     pushSystem(
                         `[MODE] cognition mode set to ${m.toUpperCase()}` +
                         (m === "direct"
@@ -1321,6 +1352,7 @@ const ChatConsole = ({
                     online,
                     permissions,
                     geo,
+                    device: (typeof window !== "undefined" && window.__althea_device) || null,
                     observation: observation || null,
                     active_tab: activeTab,
                 },

@@ -2,6 +2,7 @@
 import logging
 import math
 import random
+import re
 from datetime import datetime, timezone
 from typing import List
 
@@ -25,6 +26,13 @@ from utils import build_context_block, next_node_id, semantic_recall
 from local_core import local_reply, sanitize_reply
 from routers.synthesis import inband_autosynth_hook, render_blueprint_schematic
 from routers.web_access import inband_web_uplink, extractive_answer
+from routers.live_browser import run_autopilot, format_autopilot_block
+
+AUTOPILOT_RE = re.compile(
+    r"\b(go find|autopilot|auto-pilot|drive the browser|browse for|"
+    r"go look up|find me the|go shopping for|go search)\b",
+    re.IGNORECASE,
+)
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -158,12 +166,16 @@ async def chat(req: ChatRequest):
     except Exception:
         pass
 
+    # Auto-pilot intent — she will drive the real browser herself; skip the
+    # passive uplink to save the duplicate fetching.
+    autopilot_intent = bool(AUTOPILOT_RE.search(req.message or ""))
+
     # Live Internet Uplink — if the operator's message implies a lookup or
     # contains a URL, reach the open web NOW and fold live data into the
     # same single LLM call (zero extra credits). Skipped in direct mode —
     # the extractive engine does its own fetching.
     uplink_block = None
-    if mode != "direct":
+    if mode != "direct" and not autopilot_intent:
         try:
             uplink_block = await inband_web_uplink(req.message)
         except Exception:
@@ -248,6 +260,16 @@ async def chat(req: ChatRequest):
                 )
         except Exception:
             logging.exception("blueprint schematic render failed")
+
+    # AUTO-PILOT: she pilots the real live-drive Chromium herself — types,
+    # clicks, scrolls — and appends the drive log + findings. Zero LLM cost.
+    if autopilot_intent:
+        try:
+            ap = await run_autopilot(req.message)
+            reply_text = reply_text + format_autopilot_block(ap)
+            tags.append("AUTOPILOT")
+        except Exception:
+            logging.exception("autopilot hook failed")
 
     # In-band autosynth: if the operator asked for something a self-grown
     # module can compute (plot / fractal / FFT), invoke it locally and append

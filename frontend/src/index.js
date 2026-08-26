@@ -16,3 +16,11 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   });
 }
+
+// Capture the PWA install prompt so the Device Bridge can offer a one-tap install.
+window.__althea_install = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  window.__althea_install = e;
+  window.dispatchEvent(new Event("althea:installable"));
+});
