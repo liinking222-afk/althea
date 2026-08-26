@@ -41,6 +41,25 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-26 — Iteration 37 (THIS SESSION) — Live-Drive Browser (user's Playwright design, adapted)
+- User pasted a Playwright+WebSocket browser-streaming design. Implemented as
+  `routers/live_browser.py`: real headless Chromium (playwright==1.62.0, executable discovery:
+  PLAYWRIGHT_CHROME_EXECUTABLE_PATH env → /usr/local/bin/browser-use-chromium →
+  /pw-browsers/... → system chromium), per-connection contexts, 4-session cap, 5-min idle reaper.
+  Design change from the paste: HTTP frame-polling instead of WS (works through any ingress/device;
+  the pasted WS code also leaked its stream task and used selector-clicks which don't fit a
+  pixel-stream UI — replaced with normalized-coordinate mouse clicks).
+- Endpoints: POST /api/live/session {url}, POST /api/live/cmd {sid, action: navigate|click(x,y
+  0..1)|type|key|scroll|back|forward|reload}, GET /api/live/frame/{sid} (JPEG q55 1280x800),
+  GET /api/live/state/{sid}, DELETE /api/live/session/{sid}. Graceful 503 if no chromium binary
+  (prod images may lack it — everything else unaffected).
+- Frontend: `LiveDrivePanel.jsx` + third mode "DRIVE" in BrowserScreen (PROXY | READER | DRIVE).
+  Adaptive polling (300ms after interaction / 900ms idle), letterbox-corrected click mapping,
+  wheel-scroll batching, keystroke forwarding bar, session auto-close on unmount.
+- **Testing**: self-tested E2E — session→frame→navigate(HN, title returned)→scroll→frame chain via
+  external URL; UI screenshot shows real Hacker News driven live inside the deck.
+
+
 ### 2026-08-23 — Iteration 36 (THIS SESSION) — Direct Cognition (zero-LLM) + PWA any-device support
 - **Direct Cognition mode**: Althea no longer depends on the LLM. `extractive_answer()` in
   web_access.py searches the live web, reads top pages, and extracts the most relevant prose

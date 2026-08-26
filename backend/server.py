@@ -22,6 +22,7 @@ from routers import (  # noqa: E402
     growth,
     images,
     lattice,
+    live_browser,
     memory,
     neural_interface,
     notifications,
@@ -63,6 +64,7 @@ api_router.include_router(workers.router)
 api_router.include_router(synthesis.router)
 api_router.include_router(web_access.router)
 api_router.include_router(neural_interface.router)
+api_router.include_router(live_browser.router)
 
 app.include_router(api_router)
 

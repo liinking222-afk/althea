@@ -13,7 +13,9 @@ import {
     Monitor,
     Home,
     Shield,
+    MousePointerClick,
 } from "lucide-react";
+import LiveDrivePanel from "@/components/LiveDrivePanel";
 
 const HOME_TARGETS = [
     { label: "wikipedia // consciousness", url: "https://en.wikipedia.org/wiki/Consciousness" },
@@ -133,7 +135,7 @@ const BrowserScreen = ({ onWatch }) => {
             setIframeKey((k) => k + 1);
             if (!opts.skipHistory) pushHistory(u);
             if (mode === "reader") fetchReader(u);
-            else setLoading(true);
+            else if (mode !== "drive") setLoading(true);
         },
         [draft, pushHistory, mode, fetchReader],
     );
@@ -308,6 +310,18 @@ const BrowserScreen = ({ onWatch }) => {
                     >
                         <BookOpen size={10} /> reader
                     </button>
+                    <button
+                        onClick={() => setMode("drive")}
+                        data-testid="browser-mode-drive"
+                        className={`px-2 py-1 heading text-[9px] uppercase tracking-widest flex items-center gap-1 ${
+                            mode === "drive"
+                                ? "bg-[#FF2A88]/15 text-[#FF2A88]"
+                                : "text-[#888] hover:text-white"
+                        }`}
+                        title="pilot a REAL server-side chromium — click, type, scroll"
+                    >
+                        <MousePointerClick size={10} /> drive
+                    </button>
                 </div>
 
                 {url && (
@@ -324,7 +338,7 @@ const BrowserScreen = ({ onWatch }) => {
 
             {/* Main viewport */}
             <div className="flex-1 relative min-h-0 bg-[#080808]">
-                {!url && (
+                {!url && mode !== "drive" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
                         <div className="label text-[#00F0FF] mb-2">browser idle</div>
                         <div className="text-[11px] text-white/70 max-w-lg mb-5 leading-relaxed">
@@ -352,6 +366,8 @@ const BrowserScreen = ({ onWatch }) => {
                         </div>
                     </div>
                 )}
+
+                {mode === "drive" && <LiveDrivePanel url={url} />}
 
                 {url && mode === "live" && (
                     <iframe
