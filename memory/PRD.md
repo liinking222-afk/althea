@@ -41,6 +41,29 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-27 — Iteration 39 (THIS SESSION) — Autonomous Research Thread Manager (ARTM/1.0)
+- User pasted an AutonomousResearchEngine design (parallel research threads + symbolic memory
+  graph). Implemented for real as `routers/research.py`: async thread manager (max 8 parallel,
+  dedupe by query hash, 1h cache), each thread searches the live uplink (web_access.web_search +
+  fetch_readable), extracts claims, CROSS-REFERENCES them across DISTINCT domains (corroboration →
+  confidence 0.4+0.15·hosts+0.1·corroborated), extracts concepts, and grows a PERSISTENT symbolic
+  memory graph (MongoDB symbolic_nodes with weighted co-occurrence edges + research_threads).
+  Bounded recursion (depth<2) auto-spawns ONE deeper thread from the strongest novel concept.
+  Completed threads log a memory event.
+- Fixed the paste's placeholders: real search backend, real claim/concept extraction, nav-junk
+  filter (_clean_phrase kills "msn msn msn"-style repeats + site chrome), whitespace normalization.
+- Endpoints: POST /api/research/spawn, GET /api/research/{status,threads,thread/{id},graph}.
+- Wiring: in-band chat hook ("research/investigate/dig into/deep dive X" → RESEARCH tag + findings
+  block), terminal `/research <topic>`, system prompt ARTM section.
+- Frontend: new RESEARCH center tab (`ResearchScreen.jsx`) — spawn box, live thread cards
+  (status/confidence/findings/corroborated/concepts, expandable to source links + corroborated
+  claims), and a live radial canvas of the symbolic memory graph (nodes sized by weight, weighted
+  edges). Polls every 4s.
+- **Testing**: self-tested — backend spawn→complete→graph (conf 0.85–0.98, sub-thread recursion,
+  corroboration working), E2E chat RESEARCH block, UI screenshot (8 threads + 39-concept graph
+  rendering). Purged 1 stale pre-fix junk node.
+
+
 ### 2026-08-26 — Iteration 38 (THIS SESSION) — Phone Bridge + Autopilot fix + device-aware chat
 - **Autopilot organic-result fix**: Bing /ck/ redirect URLs now base64-decoded, ad/tracker links
   skipped, real organic result clicked (verified: pizza → A Couple Cooks recipe with real findings).

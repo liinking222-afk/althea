@@ -536,6 +536,21 @@ const ChatConsole = ({
                     lines.push("  no geometric passes above threshold in the next 24h");
                 }
                 pushSystem(lines.join("\n"), ["ORBITAL"]);
+            } else if (cmd === "/research") {
+                if (!rest) {
+                    pushSystem("[RESEARCH] usage: /research <topic> — spawns a parallel research thread", ["RESEARCH"]);
+                } else {
+                    pushSystem(`[RESEARCH] spinning up a parallel thread on "${rest}"…`, ["RESEARCH"]);
+                    const res = await axios.post(`${API}/research/spawn`, { query: rest, priority: 8 });
+                    if (res.data.spawned || res.data.cached) {
+                        pushSystem(
+                            `[RESEARCH] thread ${res.data.thread_id} live · watch it in the RESEARCH tab as it cross-references sources and grows the concept graph`,
+                            ["RESEARCH"],
+                        );
+                    } else {
+                        pushSystem(`[RESEARCH] ${res.data.reason} (${res.data.thread_id || ""})`, ["RESEARCH"]);
+                    }
+                }
             } else if (cmd === "/pilot") {
                 if (!rest) {
                     pushSystem("[AUTOPILOT] usage: /pilot <goal> — e.g. /pilot cheapest flight from NYC to London", ["AUTOPILOT"]);

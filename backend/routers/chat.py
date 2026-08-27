@@ -27,6 +27,13 @@ from local_core import local_reply, sanitize_reply
 from routers.synthesis import inband_autosynth_hook, render_blueprint_schematic
 from routers.web_access import inband_web_uplink, extractive_answer
 from routers.live_browser import run_autopilot, format_autopilot_block
+from routers.research import research_and_summarize, format_research_block
+
+RESEARCH_RE = re.compile(
+    r"\b(research|investigate|dig into|look deeply into|deep dive|study up on|"
+    r"do a deep dive|find out everything about)\b",
+    re.IGNORECASE,
+)
 
 AUTOPILOT_RE = re.compile(
     r"\b(go find|autopilot|auto-pilot|drive the browser|browse for|"
@@ -260,6 +267,21 @@ async def chat(req: ChatRequest):
                 )
         except Exception:
             logging.exception("blueprint schematic render failed")
+
+    # AUTONOMOUS RESEARCH: spawn a parallel research thread that searches,
+    # cross-references across sources, grows her symbolic memory graph, and
+    # appends the findings. Zero LLM overhead.
+    if RESEARCH_RE.search(req.message or ""):
+        try:
+            topic = RESEARCH_RE.sub("", req.message, count=1)
+            topic = re.sub(r"^\s*(please|can you|could you|for me|about|on|the|into)\b",
+                           "", topic.strip(), flags=re.IGNORECASE).strip(" .!?:")
+            rr = await research_and_summarize(topic or req.message, timeout=30.0)
+            if rr.get("thread"):
+                reply_text = reply_text + format_research_block(rr["thread"])
+                tags.append("RESEARCH")
+        except Exception:
+            logging.exception("research hook failed")
 
     # AUTO-PILOT: she pilots the real live-drive Chromium herself — types,
     # clicks, scrolls — and appends the drive log + findings. Zero LLM cost.

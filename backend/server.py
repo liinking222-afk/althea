@@ -28,6 +28,7 @@ from routers import (  # noqa: E402
     notifications,
     observe,
     perception,
+    research,
     satellite,
     server_ops,
     synthesis,
@@ -65,6 +66,7 @@ api_router.include_router(synthesis.router)
 api_router.include_router(web_access.router)
 api_router.include_router(neural_interface.router)
 api_router.include_router(live_browser.router)
+api_router.include_router(research.router)
 
 app.include_router(api_router)
 

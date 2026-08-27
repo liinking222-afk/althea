@@ -6,7 +6,7 @@ export const STATIC_SLASH = [
     "/help", "/banner", "/clear", "/status", "/diagnose", "/troubleshoot", "/repair", "/consolidate",
     "/workers", "/cores", "/sweep", "/kick", "/synthesize", "/autosynth", "/gaps",
     "/web", "/search", "/fetch", "/uplink", "/neural", "/bci", "/decode",
-    "/letter", "/blueprint", "/track", "/specialize", "/mode", "/pilot",
+    "/letter", "/blueprint", "/track", "/specialize", "/mode", "/pilot", "/research",
     "/imagine", "/draw", "/visualize", "/capabilities", "/system",
     "/memory", "/remember", "/forget", "/clear-memory",
     "/recall", "/concepts",
@@ -43,6 +43,7 @@ export const TAG_COLOR = {
     DIRECT: "#CCFF00",
     "ZERO-LLM": "#CCFF00",
     AUTOPILOT: "#FF2A88",
+    RESEARCH: "#A29BFE",
     "AUTOSYNTH-INVOKE": "#CCFF00",
     GROWTH: "#FF2A88",
     GROWN: "#FF2A88",
@@ -133,6 +134,7 @@ export const HELP_TEXT =
     "/specialize [domain]  run the 4-stage transfer-learning pipeline (pretrain→freeze→head→fine-tune)\n" +
     "/mode [direct|hybrid]  direct = ZERO-LLM live-internet answers (0 credits) · hybrid = LLM + uplink\n" +
     "/pilot <goal>      autopilot — althea drives the real browser herself (watch in BROWSER → DRIVE)\n" +
+    "/research <topic>  spawn a parallel research thread (cross-refs sources, grows concept graph)\n" +
     "/clear             wipe terminal scrollback\n" +
     "/capabilities      list all subsystems\n" +
     "/zoom in|out|reset zoom neural lattice\n" +
