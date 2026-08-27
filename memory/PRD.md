@@ -41,6 +41,30 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-08-27 — Iteration 40 (THIS SESSION) — Graph Explorer + Research constellation in live lattice
+- **Backend**: GET /api/research/node/{node_id} — full concept detail: node stats, top-12
+  neighbors resolved to concepts with link strengths, cleaned evidence trail (whitespace
+  normalized + consecutive-repeat-word dedupe kills stale "msn msn msn" junk), and the source
+  research threads (query/confidence/citations). 404 on unknown id.
+- **3D lattice (NeuralCore.jsx)**: symbolic research graph now renders as a violet (#A29BFE)
+  icosahedron constellation on an outermost slow-orbiting shell (r~14.5, outside quantum r~11),
+  sized by weight, with co-occurrence edges. Polls /api/research/graph every 8s (signature-gated
+  rebuild). Raycaster extended: clicking a research node opens the GraphExplorerPanel; clicking
+  cognitive satellites still opens the MemoryDrawer as before. Selected node blazes (scale+
+  emissive). HUD: new RESEARCH readout + 4th legend dot. E2E hook window.__althea_pickFirstResearchNode.
+- **GraphExplorerPanel.jsx** (shared): concept header, weight/confidence bar, clickable neighbor
+  chips (click → panel swaps to that concept = expand), evidence queries, source threads with
+  citation links. data-testids: graph-explorer-{panel,concept,neighbor,evidence,thread,close}.
+- **ResearchScreen.jsx**: 2D radial canvas is now clickable (hit-testing on drawn node positions)
+  → same explorer panel overlays the graph pane.
+- **Handoff-flagged risk resolved by inspection**: research.py already persists to MongoDB
+  (symbolic_nodes + research_threads) — no in-memory data-loss issue existed.
+- **Testing**: testing_agent iteration_21 — backend 13/13 PASS (incl. ARTM spawn→COMPLETE,
+  Live-Drive session lifecycle w/ real chromium, zero-LLM Everest answer with sources),
+  frontend 100% (3D hook flow webb→discoveries neighbor expand, 2D canvas click → 'telescope'
+  panel, 4-layer legend, RESEARCH +48 readout, zero console errors). Regression suite:
+  /app/backend/tests/test_iter21_graph_explorer.py.
+
 ### 2026-08-27 — Iteration 39 (THIS SESSION) — Autonomous Research Thread Manager (ARTM/1.0)
 - User pasted an AutonomousResearchEngine design (parallel research threads + symbolic memory
   graph). Implemented for real as `routers/research.py`: async thread manager (max 8 parallel,

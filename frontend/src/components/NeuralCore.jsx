@@ -3,6 +3,7 @@ import * as THREE from "three";
 import axios from "axios";
 import { API } from "@/App";
 import { quantumOS } from "@/lib/quantumMindOS";
+import GraphExplorerPanel from "@/components/GraphExplorerPanel";
 
 const LAYERS = [6, 10, 10, 4];
 const ACCENT = 0xccff00;
@@ -48,6 +49,13 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
     const onClickRef = useRef(onLatticeNodeClick);
     const [latticeCount, setLatticeCount] = React.useState(0);
     const [quantumCount, setQuantumCount] = React.useState(0);
+    const [researchCount, setResearchCount] = React.useState(0);
+    const [researchSel, setResearchSel] = React.useState(null);
+    const researchHighlightRef = useRef(null);
+    const selectResearch = React.useCallback((id, concept) => {
+        researchHighlightRef.current = id;
+        setResearchSel({ id, concept });
+    }, []);
     // Camera-distance range: stays far enough that the entire lattice fits
     // even at extreme growth. `max` is intentionally huge so the operator
     // can always pull back regardless of node count.
@@ -490,6 +498,116 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             2500,
         );
 
+        // ---- SYMBOLIC RESEARCH GRAPH — violet outermost constellation ----
+        // Concepts learned by the ARTM research threads, persisted in Mongo.
+        // Rendered as icosahedra sized by weight on a slow-orbiting shell
+        // (r~14.5, outside the quantum shell). Clicking one opens the
+        // Graph Explorer panel (neighbors + evidence).
+        const researchGroup = new THREE.Group();
+        scene.add(researchGroup);
+        const researchMeshes = []; // visible, animated
+        const researchPicks = []; // invisible larger raycast targets
+        const RVIOLET = 0xa29bfe;
+
+        function disposeResearch() {
+            while (researchGroup.children.length) {
+                const c = researchGroup.children.pop();
+                researchGroup.remove(c);
+                c.geometry?.dispose?.();
+                if (Array.isArray(c.material))
+                    c.material.forEach((m) => m.dispose?.());
+                else c.material?.dispose?.();
+            }
+            researchMeshes.length = 0;
+            researchPicks.length = 0;
+        }
+
+        function researchPosition(id) {
+            let h = 0;
+            for (let i = 0; i < id.length; i++)
+                h = (h * 33 + id.charCodeAt(i)) | 0;
+            const golden = Math.PI * (3 - Math.sqrt(5));
+            const i = Math.abs(h) % 512;
+            const r = 14.5 + (i % 6) * 0.4;
+            const theta = i * golden;
+            const phi = Math.acos(1 - 2 * ((i * 0.173) % 1));
+            return new THREE.Vector3(
+                r * Math.sin(phi) * Math.cos(theta),
+                r * Math.sin(phi) * Math.sin(theta) * 0.65,
+                r * Math.cos(phi),
+            );
+        }
+
+        let lastResearchSig = "";
+        async function refreshResearch() {
+            try {
+                const res = await axios.get(`${API}/research/graph?limit=80`);
+                const g = res.data || {};
+                const rnodes = g.nodes || [];
+                setResearchCount(rnodes.length);
+                const sig = rnodes
+                    .map((n) => n.id + ":" + (n.weight | 0))
+                    .join(",");
+                if (sig === lastResearchSig) return;
+                lastResearchSig = sig;
+                disposeResearch();
+                if (!rnodes.length) return;
+                const positions = new Map();
+                rnodes.forEach((n) =>
+                    positions.set(n.id, researchPosition(n.id)),
+                );
+                (g.edges || []).forEach((e) => {
+                    const a = positions.get(e.source);
+                    const b = positions.get(e.target);
+                    if (!a || !b) return;
+                    const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+                    const mat = new THREE.LineBasicMaterial({
+                        color: RVIOLET,
+                        transparent: true,
+                        opacity: Math.min(0.12 + (e.strength || 1) * 0.08, 0.55),
+                    });
+                    researchGroup.add(new THREE.Line(geom, mat));
+                });
+                const pickGeom = new THREE.SphereGeometry(0.55, 8, 8);
+                rnodes.forEach((n, idx) => {
+                    const size = 0.12 + Math.min((n.weight || 1) * 0.018, 0.16);
+                    const geo = new THREE.IcosahedronGeometry(size, 1);
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: RVIOLET,
+                        emissive: RVIOLET,
+                        emissiveIntensity: 1.5,
+                        toneMapped: false,
+                    });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.copy(positions.get(n.id));
+                    mesh.userData = {
+                        seed: idx * 0.23 + 0.11,
+                        isResearch: true,
+                        researchId: n.id,
+                        concept: n.concept,
+                        weight: n.weight,
+                        confidence: n.confidence,
+                    };
+                    researchGroup.add(mesh);
+                    researchMeshes.push(mesh);
+                    const pickMat = new THREE.MeshBasicMaterial({
+                        transparent: true,
+                        opacity: 0,
+                        depthWrite: false,
+                    });
+                    const pick = new THREE.Mesh(pickGeom, pickMat);
+                    pick.position.copy(positions.get(n.id));
+                    pick.userData = mesh.userData;
+                    researchGroup.add(pick);
+                    researchPicks.push(pick);
+                });
+            } catch (e) {
+                /* transient */
+            }
+        }
+        refreshResearch();
+        const researchPoll = setInterval(refreshResearch, 8000);
+
         // Animate
         const clock = new THREE.Clock();
         let raf = 0;
@@ -574,14 +692,21 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                 Math.abs(e.clientY - downY) > 5
             )
                 return;
-            if (!latticeMeshes.length) return;
+            const pickables = researchPicks
+                .concat(researchMeshes)
+                .concat(latticeMeshes);
+            if (!pickables.length) return;
             const rect = renderer.domElement.getBoundingClientRect();
             pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
-            const hits = raycaster.intersectObjects(latticeMeshes, false);
-            if (hits.length && onClickRef.current) {
-                onClickRef.current(hits[0].object.userData);
+            const hits = raycaster.intersectObjects(pickables, false);
+            if (!hits.length) return;
+            const ud = hits[0].object.userData;
+            if (ud.isResearch) {
+                selectResearch(ud.researchId, ud.concept);
+            } else if (onClickRef.current) {
+                onClickRef.current(ud);
             }
         };
         renderer.domElement.addEventListener("mousedown", onCanvasMouseDown);
@@ -594,6 +719,15 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             if (m && onClickRef.current) {
                 onClickRef.current(m.userData);
                 return m.userData.nodeId;
+            }
+            return null;
+        };
+        // E2E hook — open the Graph Explorer on the first research concept.
+        window.__althea_pickFirstResearchNode = () => {
+            const m = researchMeshes.find((mesh) => mesh.userData?.isResearch);
+            if (m) {
+                selectResearch(m.userData.researchId, m.userData.concept);
+                return m.userData.researchId;
             }
             return null;
         };
@@ -693,6 +827,20 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                     (isFiring ? 1.8 : 1.2) + 0.7 * Math.sin(t * 2.8 + seed * 12);
             });
 
+            // animate RESEARCH constellation — slow orbit, selected node blazes
+            researchGroup.rotation.y = t * 0.04;
+            const selId = researchHighlightRef.current;
+            researchMeshes.forEach((m) => {
+                const { seed, researchId } = m.userData;
+                const isSel = selId && researchId === selId;
+                const s =
+                    (isSel ? 1.7 : 1.0) + 0.25 * Math.sin(t * 2.0 + seed * 9);
+                m.scale.set(s, s, s);
+                m.rotation.y = t * 0.5 + seed * 3;
+                m.material.emissiveIntensity =
+                    (isSel ? 2.8 : 1.3) + 0.5 * Math.sin(t * 2.2 + seed * 7);
+            });
+
             renderer.render(scene, camera);
         };
         animate();
@@ -723,6 +871,8 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
             renderer.domElement.removeEventListener("wheel", onWheel);
             unsubQuantum?.();
             clearInterval(quantumTick);
+            clearInterval(researchPoll);
+            delete window.__althea_pickFirstResearchNode;
             delete window.__althea_zoom;
             delete window.__althea_zoomReset;
             delete window.__althea_zoomFit;
@@ -821,6 +971,11 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                             value={`+${quantumCount}`}
                             yellow
                         />
+                        <ReadoutBlock
+                            label="research"
+                            value={`+${researchCount}`}
+                            violet
+                        />
                     </div>
 
                     {/* 3-layer legend — cognitive · evolution · quantum */}
@@ -831,6 +986,7 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                         <LegendDot color="#00E5FF" label="cognitive" />
                         <LegendDot color="#FF2A88" label="evolution" />
                         <LegendDot color="#FFD400" label="quantum" />
+                        <LegendDot color="#A29BFE" label="research" />
                     </div>
 
                     {/* Zoom controls */}
@@ -884,6 +1040,20 @@ const NeuralCore = ({ introspection, embed, onLatticeNodeClick }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* GRAPH EXPLORER — opens when a research concept is clicked */}
+                {researchSel && (
+                    <div className="absolute top-12 left-3 bottom-4 w-80 max-w-[85%] pointer-events-auto z-20 fade-up">
+                        <GraphExplorerPanel
+                            nodeId={researchSel.id}
+                            onSelect={selectResearch}
+                            onClose={() => {
+                                researchHighlightRef.current = null;
+                                setResearchSel(null);
+                            }}
+                        />
+                    </div>
+                )}
             </div>
     );
 
@@ -931,18 +1101,26 @@ const CornerTick = ({ className = "", flipX, flipY }) => (
     </div>
 );
 
-const ReadoutBlock = ({ label, value, cyan, yellow }) => (
+const ReadoutBlock = ({ label, value, cyan, yellow, violet }) => (
     <div>
         <div className="label text-[9px]">{label}</div>
         <div
             className={`heading text-base ${
-                yellow
-                    ? "text-[#FFD400]"
-                    : cyan
-                        ? "text-[#00F0FF] glow-cyan"
-                        : "text-[#CCFF00] glow"
+                violet
+                    ? "text-[#A29BFE]"
+                    : yellow
+                        ? "text-[#FFD400]"
+                        : cyan
+                            ? "text-[#00F0FF] glow-cyan"
+                            : "text-[#CCFF00] glow"
             } leading-none mt-0.5`}
-            style={yellow ? { textShadow: "0 0 8px #FFD400" } : undefined}
+            style={
+                yellow
+                    ? { textShadow: "0 0 8px #FFD400" }
+                    : violet
+                        ? { textShadow: "0 0 8px #A29BFE" }
+                        : undefined
+            }
         >
             {value}
         </div>

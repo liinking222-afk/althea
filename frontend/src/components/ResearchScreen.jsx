@@ -5,13 +5,15 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { API } from "@/App";
 import { Brain, Loader2, Radar, GitBranch, ExternalLink } from "lucide-react";
+import GraphExplorerPanel from "@/components/GraphExplorerPanel";
 
 const V = "#A29BFE";
 const LIME = "#CCFF00";
 const CYAN = "#00E5FF";
 
-const SymbolicGraph = ({ graph }) => {
+const SymbolicGraph = ({ graph, onPick }) => {
     const ref = useRef(null);
+    const hitsRef = useRef([]);
     useEffect(() => {
         const cv = ref.current;
         if (!cv) return;
@@ -21,6 +23,7 @@ const SymbolicGraph = ({ graph }) => {
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = "#050507";
         ctx.fillRect(0, 0, W, H);
+        hitsRef.current = [];
         const nodes = (graph?.nodes || []).slice(0, 40);
         if (!nodes.length) {
             ctx.fillStyle = "#555";
@@ -50,6 +53,7 @@ const SymbolicGraph = ({ graph }) => {
         // nodes
         Object.values(pos).forEach(({ x, y, n }) => {
             const r = 5 + Math.min(n.weight * 2.5, 22);
+            hitsRef.current.push({ x, y, r, id: n.id, concept: n.concept });
             const g = ctx.createRadialGradient(x, y, 0, x, y, r);
             g.addColorStop(0, "#CCFF00");
             g.addColorStop(1, "rgba(162,155,254,0.15)");
@@ -62,7 +66,27 @@ const SymbolicGraph = ({ graph }) => {
             ctx.fillText(String(n.concept).slice(0, 22), x + r + 4, y + 6);
         });
     }, [graph]);
-    return <canvas ref={ref} className="w-full h-full block" data-testid="symbolic-graph-canvas" />;
+    const onClick = (e) => {
+        const cv = ref.current;
+        if (!cv || !onPick) return;
+        const rect = cv.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * cv.width;
+        const y = ((e.clientY - rect.top) / rect.height) * cv.height;
+        let best = null;
+        for (const h of hitsRef.current) {
+            const d = Math.hypot(h.x - x, h.y - y);
+            if (d <= h.r + 14 && (!best || d < best.d)) best = { ...h, d };
+        }
+        if (best) onPick(best.id, best.concept);
+    };
+    return (
+        <canvas
+            ref={ref}
+            onClick={onClick}
+            className="w-full h-full block cursor-pointer"
+            data-testid="symbolic-graph-canvas"
+        />
+    );
 };
 
 export default function ResearchScreen() {
@@ -72,6 +96,7 @@ export default function ResearchScreen() {
     const [query, setQuery] = useState("");
     const [busy, setBusy] = useState(false);
     const [open, setOpen] = useState(null);
+    const [sel, setSel] = useState(null);
 
     const refresh = useCallback(async () => {
         try {
@@ -215,10 +240,22 @@ export default function ResearchScreen() {
                     <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 pointer-events-none">
                         <GitBranch size={11} style={{ color: V }} />
                         <span className="label text-[9px] uppercase tracking-widest text-[#888]">
-                            symbolic memory graph · {graph?.count || 0} concepts
+                            symbolic memory graph · {graph?.count || 0} concepts — click a node to explore
                         </span>
                     </div>
-                    <SymbolicGraph graph={graph} />
+                    <SymbolicGraph
+                        graph={graph}
+                        onPick={(id, concept) => setSel({ id, concept })}
+                    />
+                    {sel && (
+                        <div className="absolute inset-y-2 right-2 w-72 max-w-[90%] z-20">
+                            <GraphExplorerPanel
+                                nodeId={sel.id}
+                                onSelect={(id, concept) => setSel({ id, concept })}
+                                onClose={() => setSel(null)}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

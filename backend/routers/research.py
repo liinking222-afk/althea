@@ -373,6 +373,46 @@ async def get_thread(thread_id: str):
     return doc
 
 
+@router.get("/research/node/{node_id}")
+async def node_detail(node_id: str):
+    n = await db.symbolic_nodes.find_one({"node_id": node_id}, {"_id": 0})
+    if not n:
+        raise HTTPException(status_code=404, detail="node_not_found")
+    conns = n.get("connections") or {}
+    top = sorted(conns.items(), key=lambda kv: -kv[1])[:12]
+    docs = await db.symbolic_nodes.find(
+        {"node_id": {"$in": [k for k, _ in top]}},
+        {"_id": 0, "node_id": 1, "concept": 1, "weight": 1, "confidence": 1},
+    ).to_list(12)
+    by_id = {d["node_id"]: d for d in docs}
+    neighbors = [{**by_id[k], "strength": v} for k, v in top if k in by_id]
+    threads = await db.research_threads.find(
+        {"concepts": n["concept"]},
+        {"_id": 0, "thread_id": 1, "query": 1, "status": 1, "confidence": 1,
+         "citations": 1, "completed_at": 1, "cross_refs": 1},
+    ).sort("started_at", -1).to_list(6)
+    evidence, seen_ev = [], set()
+    for q in reversed(n.get("evidence") or []):
+        words = re.sub(r"\s+", " ", q or "").strip().split()
+        dedup = [w for i, w in enumerate(words) if i == 0 or words[i - 1].lower() != w.lower()]
+        cq = " ".join(dedup)
+        if cq and cq not in seen_ev:
+            seen_ev.add(cq)
+            evidence.append(cq)
+        if len(evidence) >= 8:
+            break
+    return {
+        "node": {"id": n["node_id"], "concept": n["concept"],
+                 "weight": n.get("weight", 1),
+                 "confidence": n.get("confidence", 0.5),
+                 "created_at": n.get("created_at"),
+                 "last_accessed": n.get("last_accessed")},
+        "neighbors": neighbors,
+        "evidence": evidence,
+        "threads": threads,
+    }
+
+
 @router.get("/research/graph")
 async def symbolic_graph(limit: int = 60):
     nodes = await db.symbolic_nodes.find({}, {"_id": 0}).sort(

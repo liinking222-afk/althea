@@ -1,6 +1,6 @@
 """AUTOSYNTH — Data Visualization
 Category: matplotlib
-Generated: 2026-08-23T07:42:23.427943+00:00
+Generated: 2026-08-27T20:02:23.031990+00:00
 Rationale: Detected in recent dialogue: 'data-visualization' pattern surfaced multiple times.
 
 Executable capability wired into ALTHEA's lattice by
