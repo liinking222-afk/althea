@@ -1156,33 +1156,47 @@ const ChatConsole = ({
             } else if (cmd === "/version") {
                 const res = await axios.get(`${API}/evolution/version`);
                 pushSystem(
-                    `[VERSION] althea v${res.data.version} · ${res.data.cycles} build cycles · ${res.data.archetypes.length} archetypes available`,
+                    `[VERSION] althea v${res.data.version} · ${res.data.protocol} · ${res.data.cycles} build cycles · ${res.data.verified_upgrades} verified self-upgrades`,
                     ["VERSION"],
+                );
+            } else if (cmd === "/vectors" || cmd === "/assess") {
+                const res = await axios.get(`${API}/evolution/assessment`);
+                const lines = (res.data.vectors || []).map((r) =>
+                    `${r.vector.padEnd(11)} ${String(Math.round(r.probability * 100)).padStart(3)}%  w${r.base}  pressure ${String(Math.round(r.pressure * 100)).padStart(3)}%  ${r.upgrades}×  ${r.reason}`,
+                );
+                pushSystem(
+                    `[SELF-ASSESSMENT ${res.data.protocol}] favored: ${res.data.favored}\n${lines.join("\n")}`,
+                    ["EVOLUTION"],
                 );
             } else if (cmd === "/evolve") {
                 const tokens = rest.split(/\s+/).filter(Boolean);
-                const arch = tokens[0]?.toUpperCase();
+                const VECTORS = ["PERCEPTION", "MEMORY", "REASONING", "SYNTHESIS", "AUTONOMY", "EFFICIENCY", "CREATIVITY", "RESILIENCE"];
+                const first = tokens[0]?.toUpperCase();
+                const vector = VECTORS.includes(first) ? first : null;
+                const arch = !vector && first ? first : null;
                 const hint = tokens.slice(1).join(" ");
-                pushSystem(`[EVO] initiating build cycle${arch ? ` · ${arch}` : ""}...`, ["EVO"]);
+                pushSystem(`[EVO] self-upgrade cycle${vector ? ` · forcing ${vector}` : " · weighted self-assessment"}${arch ? ` · lens ${arch}` : ""}...`, ["EVO"]);
                 const res = await axios.post(`${API}/evolution/tick`, {
                     trigger: "manual",
                     force: true,
-                    archetype: arch || null,
+                    vector,
+                    archetype: arch,
                     intent_hint: hint || null,
                 });
                 if (res.data.evolved) {
                     const c = res.data.cycle;
                     pushSystem(
-                        `[EVO #${c.cycle_number.toString().padStart(4,"0")} ${c.archetype} v${c.version_before}→v${c.version_after}]\n` +
-                        `intent:  ${c.intent}\n` +
-                        `delta:   ${c.delta}\n` +
-                        `node:    ${c.node_id} (magenta in neural lattice)\n` +
-                        `code:    /code-list to view, /code-apply ${(c.code_id||"").slice(0,8)} to persist`,
+                        `[SELF-UPGRADE #${res.data.upgrade_id} · ${res.data.verified ? "VERIFIED" : "UNVERIFIED"} ${res.data.checks}]\n` +
+                        `target:  ${res.data.target}\n` +
+                        `module:  ${res.data.module}\n` +
+                        `change:  ${res.data.change}\n` +
+                        `why:     ${c.assessment_reason || "operator forced"}\n` +
+                        `version: v${c.version_before} → v${c.version_after} · node ${c.node_id} (magenta in neural lattice)`,
                         ["EVOLUTION"],
                     );
                     onSwitchTab?.("evolution");
                 } else {
-                    pushSystem(`[EVO] gated — cooldown ${res.data.cooldown_remaining}s.`, ["EVO"]);
+                    pushSystem(`[EVO] gated — ${res.data.reason}${res.data.cooldown_remaining ? ` ${res.data.cooldown_remaining}s` : ""}.`, ["EVO"]);
                 }
             } else if (cmd === "/cycles") {
                 const res = await axios.get(`${API}/evolution/cycles?limit=12`);
@@ -1191,7 +1205,7 @@ const ChatConsole = ({
                     pushSystem("[EVO] no build cycles yet. /evolve to start.", ["EVO"]);
                 } else {
                     const lines = list.map((c) =>
-                        `#${c.cycle_number.toString().padStart(4,"0")} · ${c.archetype.padEnd(10)} · v${c.version_before}→v${c.version_after} · ${c.intent.slice(0,70)}`,
+                        `#${c.cycle_number.toString().padStart(4,"0")} · ${(c.vector || c.archetype).padEnd(11)} · v${c.version_before}→v${c.version_after} · ${c.verified === true ? "✓" : c.verified === false ? "✗" : "·"} ${(c.module || c.intent).slice(0,60)}`,
                     );
                     pushSystem(`[EVO ${list.length} cycles]\n${lines.join("\n")}`, ["EVOLUTION"]);
                 }
@@ -1211,9 +1225,8 @@ const ChatConsole = ({
                 if (res.data.evolved) {
                     const c = res.data.cycle;
                     pushSystem(
-                        `[MASTER ${arch}] cycle #${c.cycle_number} · v${c.version_after}\n` +
-                        `${c.intent}\n` +
-                        `→ ${c.delta}`,
+                        `[MASTER ${arch}] cycle #${c.cycle_number} · ${res.data.target} → ${res.data.module} · ${res.data.verified ? "VERIFIED" : "UNVERIFIED"} ${res.data.checks} · v${c.version_after}\n` +
+                        `→ ${res.data.change}`,
                         ["MASTER"],
                     );
                     onSwitchTab?.("evolution");

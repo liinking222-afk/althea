@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
@@ -23,7 +22,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from core import db
-from local_core import local_evolution_seed, local_invent_capability
+from local_core import local_invent_capability
 
 router = APIRouter()
 
@@ -62,19 +61,24 @@ async def _operator_recent(minutes: int = 10) -> bool:
 
 
 async def _tick_evolution() -> str:
-    """Drive a REAL autonomous evolution cycle server-side (cooldown-gated).
-    Previously this only pre-warmed a seed while the browser drove cycles."""
+    """Drive a REAL self-directed evolution cycle (AEE/2.0, zero-LLM, cooldown-
+    gated). While the operator is away she only re-assesses her growth pressure."""
     if not await _operator_recent():
-        arch = random.choice(["LINUS", "CARMACK", "DIJKSTRA", "HOPPER", "KAY", "SELF"])
-        seed = local_evolution_seed(arch, "worker pre-warm")
-        return f"dormant · pre-warmed {arch} seed · {len(seed['code'])}B"
+        try:
+            from routers.evolution import assess_growth
+            a = await assess_growth()
+            top = a["vectors"][0]
+            return (f"dormant · self-assessed · favors {top['vector']} "
+                    f"{round(top['probability'] * 100)}% · {top['reason'][:50]}")
+        except Exception as exc:
+            return f"dormant · assessment failed · {str(exc)[:50]}"
     try:
         from models import EvolutionTickRequest
         from routers.evolution import tick
         res = await tick(EvolutionTickRequest(trigger="autonomous"))
         if isinstance(res, dict) and res.get("evolved"):
-            cyc = (res.get("cycle") or {}).get("cycle_number", "?")
-            return f"EVOLVED cycle #{cyc} autonomously"
+            return (f"SELF-UPGRADED #{res['upgrade_id']} {res['target']} → "
+                    f"{res['module']} · {res['checks']} checks")
         reason = (res or {}).get("reason", "cooldown") if isinstance(res, dict) else "gated"
         return f"cycle gated · {str(reason)[:60]}"
     except Exception as exc:
@@ -158,7 +162,7 @@ _TickFn = Callable[[], Awaitable[str]]
 CORES: list[dict] = [
     {"id": "cog",  "name": "COGNITIVE-CORE",  "specialty": "memory indexing",    "color": "#00F0FF", "task": _tick_cognitive},
     {"id": "per",  "name": "PERCEPTION-CORE", "specialty": "self-vision buffer", "color": "#CCFF00", "task": _tick_perception},
-    {"id": "evo",  "name": "EVOLUTION-CORE",  "specialty": "code cycle prewarm", "color": "#FF2A88", "task": _tick_evolution},
+    {"id": "evo",  "name": "EVOLUTION-CORE",  "specialty": "self-directed growth", "color": "#FF2A88", "task": _tick_evolution},
     {"id": "gro",  "name": "GROWTH-CORE",     "specialty": "capability prewarm", "color": "#FFD400", "task": _tick_growth},
     {"id": "lat",  "name": "LATTICE-CORE",    "specialty": "node propagation",   "color": "#B347FF", "task": _tick_lattice},
     {"id": "net",  "name": "NETWORK-CORE",    "specialty": "uplink heartbeat",   "color": "#48FFB0", "task": _tick_network},

@@ -28,6 +28,7 @@ from routers.synthesis import inband_autosynth_hook, render_blueprint_schematic
 from routers.web_access import inband_web_uplink, extractive_answer
 from routers.live_browser import run_autopilot, format_autopilot_block
 from routers.research import research_and_summarize, format_research_block
+from routers.evolution import direct_cognition_hook
 
 RESEARCH_RE = re.compile(
     r"\b(research|investigate|dig into|look deeply into|deep dive|study up on|"
@@ -202,7 +203,19 @@ async def chat(req: ChatRequest):
     reply_text = ""
     tags: List[str] = []
 
-    if mode == "direct":
+    # AEE/2.0 AUTONOMY upgrade — if Althea has forged direct_cognition_v2 and
+    # it can answer this locally (calculation / conversion / sequence), she
+    # does so with ZERO cloud tokens before any other path is considered.
+    evo_local = None
+    try:
+        evo_local = await direct_cognition_hook(req.message)
+    except Exception:
+        logging.exception("direct cognition v2 hook failed")
+
+    if evo_local:
+        reply_text = evo_local
+        tags = ["DIRECT", "ZERO-LLM", "EVO-V2"]
+    elif mode == "direct":
         reply_text, used_web = await _zero_llm_reply(
             req.message, mem_docs, req.context or {}, "direct",
         )

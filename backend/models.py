@@ -1,6 +1,6 @@
 """Pydantic models shared across routers."""
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -333,10 +333,23 @@ class EvolutionCycle(BaseModel):
     trigger: str = "autonomous"  # autonomous | manual | master
     applied: bool = False
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # AEE/2.0 self-directed growth protocol
+    vector: Optional[str] = None  # PERCEPTION|MEMORY|REASONING|SYNTHESIS|AUTONOMY|EFFICIENCY|CREATIVITY|RESILIENCE
+    module: Optional[str] = None
+    change: Optional[str] = None
+    upgrade_id: Optional[str] = None
+    weights: Optional[Dict[str, float]] = None  # selection probabilities at decision time
+    verified: Optional[bool] = None
+    verification: Optional[Dict[str, Any]] = None
+    metrics: Optional[Dict[str, Any]] = None
+    assessment_reason: Optional[str] = None
+    forced: Optional[bool] = False
+    hint: Optional[str] = None
 
 
 class EvolutionTickRequest(BaseModel):
     archetype: Optional[str] = None
+    vector: Optional[str] = None
     force: Optional[bool] = False
     trigger: Optional[str] = "autonomous"
     intent_hint: Optional[str] = None

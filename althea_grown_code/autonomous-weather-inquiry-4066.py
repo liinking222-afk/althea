@@ -1,6 +1,6 @@
 """AUTOSYNTH — Weather Inquiry
 Category: meteorology
-Generated: 2026-08-23T16:54:26.746977+00:00
+Generated: 2026-08-27T20:54:26.736783+00:00
 Rationale: Detected in recent dialogue: 'weather-inquiry' pattern surfaced multiple times.
 
 Executable capability wired into ALTHEA's lattice by

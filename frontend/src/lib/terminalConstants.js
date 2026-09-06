@@ -20,7 +20,7 @@ export const STATIC_SLASH = [
     "/browse", "/server", "/sat", "/notif",
     "/code", "/code-apply", "/code-list",
     "/zoom",
-    "/evolve", "/version", "/cycles", "/master",
+    "/evolve", "/vectors", "/version", "/cycles", "/master",
     "/quantum", "/qstatus", "/qwipe",
 ];
 
@@ -179,11 +179,12 @@ export const HELP_TEXT =
     "/cull <slug>       prune a faculty\n" +
     "/run <slug> <args> invoke a grown faculty\n" +
     "/<grown-slug> <args>  shortcut for /run\n" +
-    "── evolution engine ─────────────────────\n" +
-    "/evolve [archetype] [hint]  build cycle now\n" +
+    "── evolution engine AEE/2.0 (self-directed) ─\n" +
+    "/evolve [vector|lens] [hint]  self-upgrade now (vector forces target)\n" +
+    "/vectors           live self-assessment of 8 growth vectors\n" +
     "/version           current self-version\n" +
-    "/cycles            cycle timeline\n" +
-    "/master <archetype> pull update from master coder\n" +
+    "/cycles            upgrade timeline\n" +
+    "/master <archetype> forge a cycle through a master-coder lens\n" +
     "── quantum mind os ──────────────────────\n" +
     "/quantum <input>   collapse plan/reason/critic superposition\n" +
     "/qstatus           quantum brain status\n" +

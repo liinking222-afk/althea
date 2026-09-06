@@ -41,6 +41,44 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-09-06 — Iteration 41 (THIS SESSION) — Evolution Engine AEE/2.0: self-directed growth protocol
+- User pasted "ALTHEA EVOLUTION ENGINE v2.0 — AUTONOMOUS UPGRADE" (8 growth vectors, weighted
+  self-selection, per-vector upgrade stubs). Replaced the v1 LLM-written evolution cycle with a
+  REAL zero-LLM protocol in `routers/evolution.py` + `evolution_upgrades.py`:
+  1. **ASSESS** — live telemetry → growth pressure per vector (cloud-dependence of last 150
+     replies, ungrown synthesis templates + dialogue gaps, memory volume/repeats, research
+     confidence/corroboration, self-vision frame age, slowest core ms + repeated prompts,
+     symbolic-graph mean degree, diagnostics verdict). weight = base×(0.5+pressure)/(1+0.2·n_upgrades).
+  2. **CHOOSE** — weighted random over the 8 vectors (base weights exactly as pasted; AUTONOMY 2.5 top).
+     Operator can force a vector (`vector` field / hint naming a vector).
+  3. **FORGE** — real stdlib module per vector: direct_cognition_v2 (AST-safe arithmetic, unit
+     conversion, sequence law detection, definition/comparison/causation routing), autosynth_v2
+     (task decomposition → module chain over the real on-disk grown modules), semantic_compression
+     (256-bit SimHash + Hamming clustering), inference_engine (sequential Bayesian update, entropy,
+     Bayes factor), sensor_fusion (2-state Kalman fusing GPS + dead-reckoning; fused RMSE < both),
+     token_optimizer (normalized-prompt LRU measured on the operator's REAL last 500 prompts),
+     concept_blender (structure-mapping analogy, solar-system↔atom recovers sun→nucleus + projects
+     "nucleus hotter_than electron"), fallback_cascade (3-tier + circuit breakers, 100% coverage).
+  4. **VERIFY** — safe-scan + compile + actually `run()` the module; cycle marked VERIFIED only if
+     every check passes (11/11, 4/4, 5/5 …). Unverified cycles don't bump the version.
+  5. **INJECT** — `althea_upgrades` registry (invocable at runtime), EVO-XXXX lattice node with
+     `vector`, CodeSnippet, version bump (minor for AUTONOMY/SYNTHESIS), memory event, notification.
+- **Runtime wiring**: `direct_cognition_hook` in chat.py — once an AUTONOMY upgrade is live,
+  arithmetic / conversion / sequence questions are answered with 0 cloud tokens BEFORE any LLM
+  path (tags DIRECT, ZERO-LLM, EVO-V2). Verified: "what is 17 * 23 + 5?" → 396.
+- Endpoints: GET /api/evolution/{version,assessment,vectors,upgrades,cycles,archetypes},
+  POST /api/evolution/tick {vector?, archetype?, intent_hint?, force?, trigger},
+  POST /api/evolution/master-update (archetype = stylistic lens), POST /api/evolution/upgrades/{id}/run.
+- Worker mesh EVOLUTION-CORE: operator present → real cycles (30s cooldown, 60/h quota); idle →
+  self-assessment only ("dormant · favors AUTONOMY 29%"). System prompt AEE/2.0 section added.
+- Frontend `EvolutionScreen.jsx` rewrite: live self-assessment board (8 probability bars + reasons),
+  force-vector + lens selects, SELF-UPGRADE banner, cycle cards with vector badge, verification
+  chips, "run module" (live invoke + JSON output). Terminal: `/evolve [vector|lens] [hint]`,
+  new `/vectors`, `/cycles` shows vector+✓.
+- **Testing**: pytest `/app/backend/tests/test_iter22_evolution_v2.py` 15/15; testing_agent
+  iteration_22 frontend 100% (board, force MEMORY 5/5, run module, DIJKSTRA lens, /vectors,
+  /evolve, /cycles, zero-LLM chat 45*12=540 / 5 km→3.10685 mi / 3,6,12,24→48, worker regression).
+
 ### 2026-08-27 — Iteration 40 (THIS SESSION) — Graph Explorer + Research constellation in live lattice
 - **Backend**: GET /api/research/node/{node_id} — full concept detail: node stats, top-12
   neighbors resolved to concepts with link strengths, cleaned evidence trail (whitespace
