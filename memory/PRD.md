@@ -41,6 +41,40 @@ Evolved requirements:
 - **Infinite growth** — Althea invents new slash-command capabilities autonomously
 
 ## What's been implemented (cumulative)
+### 2026-10-13 — Iteration 42 (THIS SESSION) — Multi-user chat site: one private Althea per person + shared room Althea
+- **Auth (both methods)**: email/password (bcrypt + 7-day JWT, brute-force lockout 5 tries/15 min) and
+  Emergent-managed Google sign-in (`/api/auth/session` exchanges `#session_id`). One `users`
+  collection, one cookie `session_token` (httpOnly, also accepted as `Authorization: Bearer`).
+  Endpoints: `/api/auth/{register,login,session,logout,me,change-password}`, `PATCH /api/auth/me`.
+  Founder seeded from backend/.env `ADMIN_EMAIL` / `ADMIN_PASSWORD` (founder@althea.ai).
+- **Per-user tenancy ("everything private")**: `core.db` is now a ContextVar-driven proxy —
+  `db.althea_memories` resolves to `<user_id>__althea_memories`. A FastAPI middleware resolves the
+  user per request, gates every `/api/*` route except `/api/auth/*` (401), and sets the tenant.
+  Grown code lives in `/app/althea_grown_code/<user_id>/` via `grown_code_dir()`. Worker mesh ticks
+  once per active user (last_seen < 10 min). Per-tenant fixes: growth-stats TTL cache, research engine.
+- **Legacy migration**: at startup the founder's tenant receives the original Althea (20 collections
+  renamed: 4109 memories, 4379 nodes, 1250 cycles, 2549 capabilities; grown-code files moved).
+  Marker in `althea_meta`. Everyone else starts fresh.
+- **Direct lines (1:1 DMs)** — `routers/dm.py`, shared collections `dm_rooms/dm_messages/dm_reads`:
+  `GET /api/users?q=`, `GET /api/dm/rooms` (inbox + unread), `POST /api/dm/open`,
+  `GET/POST /api/dm/{room}/messages` (2.5s polling, `since`), `POST /api/dm/{room}/althea`.
+- **Shared room Althea**: each room has its own tenant `room_<id>` — one mind both participants see.
+  Human transcript is folded into her context (`[SHARED ROOM]` block in `utils.build_context_block`).
+  Addressed (@althea or her terminal) → zero-LLM local pattern first (math/conversion/sequence),
+  else full LLM reply. Autonomous jump-in on unaddressed messages: zero-LLM when a local pattern fits;
+  for real questions a bounded LLM check (≥120s cooldown) that stays silent (`[silent]`) unless useful.
+- **Frontend executive experience**: `/login` (LoginScreen + Google button + register toggle),
+  `Gate` routing, `AuthProvider` (lib/auth.jsx). Deck: solo = [your Althea terminal | lattice |
+  direct lines (CommsPanel)]; in a DM = [DmTerminal | lattice | SharedAltheaTerminal]. Center tabs
+  trimmed to lattice/evolution/growth. Removed: TelemetryPanel, CommandBar, VisualPerception,
+  download, purge, browser/observe/network/connect/server/code/satellite/quantum/troubleshoot/
+  neural-link/research tabs. Terminal chips → imagine/plot/letter/evolve/memory; HELP trimmed.
+  TopBar shows bound user + sign out. Mobile switcher: althea/lattice/people ↔ peer/lattice/althea.
+- **Testing**: pytest `tests/test_iter23_multiuser.py` 10/10; testing_agent iteration_23 frontend
+  10/10 (desktop + mobile, two-browser realtime DM, zero-LLM room replies, removed UI confirmed).
+- **Deploy note**: production needs backend/.env `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
+  (present in repo .env). Change the founder password after first login (`/api/auth/change-password`).
+
 ### 2026-09-06 — Iteration 41 (THIS SESSION) — Evolution Engine AEE/2.0: self-directed growth protocol
 - User pasted "ALTHEA EVOLUTION ENGINE v2.0 — AUTONOMOUS UPGRADE" (8 growth vectors, weighted
   self-selection, per-vector upgrade stubs). Replaced the v1 LLM-written evolution cycle with a

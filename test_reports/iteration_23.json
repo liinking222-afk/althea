@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend testing of Althea AI multi-user chat (iteration 23). All 10 requested flows passed on desktop (1920x900) and mobile (390x844): unauth redirect, wrong-password error, founder login, register-signout, DM with Ada (zero-LLM math 2^8-6=250, conversion 12mi=19.3121km, @althea mention 9*9=81), two-user realtime (both directions saw messages within ~1.5s), dm-back-btn restores private chat-console + comms-panel, private Althea terminal (/vectors prints SELF-ASSESSMENT AEE/2.0, /help works, 17*23=391 tagged EVO-V2/zero-LLM), evolution tab renders evolution-screen+evolution-vector-board, mobile switcher shows althea/lattice/people and switches to Ada/lattice/althea when DM opened, no horizontal overflow on mobile, Google button present (not clicked), all removed UI confirmed absent (no download/purge/telemetry/command-bar/browser/observe/satellite/quantum/troubleshoot/research testids).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "EvolutionScreen select", "issues": ["React hydration warning: <span> inside <option> element (console error from dev-only x-component instrumentation wrapping option contents). Non-blocking but should be verified not caused by production code."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Hydration warning: EvolutionScreen option elements receive a nested <span> (likely from dev tooling instrumentation x-component wrappers). Confirm in production build this does not emit invalid HTML.",
+    "DM realtime observed <2s latency even though polling is advertised at 2.5s — probably post-send immediate refetch. Good UX; just note docs mention 2.5s."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not re-tested)", "frontend": "100%"},
+  "test_credentials": "founder@althea.ai / Althea-Founder-2026! ; ada@example.com / Ada-Test-2026!",
+  "seed_data_creation": "Registered one disposable member account testuser<ts>@example.com / FreshPass123! to verify fresh-Althea growth readout (m:0 l:0 e:0 vs founder m:4110 l:4379 e:1250). Also added two realtime handshake messages to Founder<->Ada room (hello-from-ada-*, hello-from-founder-*) and a few math/conversion/mention messages (2^8-6, 12 mi->km, 9*9, 17*23).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iter-23 multi-user frontend flows verified end-to-end against public URL. Realtime polling worked in both directions within ~1.5s. Only observation: a dev-build React hydration warning for <span> inside <option> inside EvolutionScreen's PERCEPTION select — looks like dev instrumentation, not a real bug. Backend was NOT re-tested as per request (backend has 10/10 passing pytest).",
+  "rca of the issue": "n/a — no failing issues."
+}
