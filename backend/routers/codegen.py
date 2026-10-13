@@ -15,7 +15,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 
-from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
+from core import EMERGENT_LLM_KEY, db, grown_code_dir, is_budget_exceeded
 from local_core import safe_code_scan, sanitize_reply
 from models import CodeApplyRequest, CodeGenerateRequest, CodeSnippet, Memory
 from routers.notifications import emit_notification
@@ -23,13 +23,6 @@ from routers.notifications import emit_notification
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 router = APIRouter()
-
-GROWN_CODE_DIR = Path("/app/althea_grown_code")
-try:
-    GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
-except Exception:
-    # On hardened/read-only filesystems, soft-apply will be skipped.
-    logging.warning("could not create %s — code apply will fall back to in-memory only", GROWN_CODE_DIR)
 
 EXT_BY_LANG = {
     "python": ".py", "javascript": ".js", "typescript": ".ts",
@@ -120,12 +113,12 @@ async def generate_code(req: CodeGenerateRequest):
     applied_path = None
     if scan["safe"] and syntax_ok:
         try:
-            GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+            grown_code_dir()
             ext = EXT_BY_LANG.get(language, ".txt")
             safe_title = re.sub(r"[^A-Za-z0-9._-]", "_", title)[:60]
             fname = f"{snippet.id[:8]}__{safe_title}{ext}"
-            applied_path = str(GROWN_CODE_DIR / fname)
-            (GROWN_CODE_DIR / fname).write_text(code, encoding="utf-8")
+            applied_path = str(grown_code_dir() / fname)
+            (grown_code_dir() / fname).write_text(code, encoding="utf-8")
             snippet.applied = True
             auto_applied = True
         except Exception:
@@ -252,10 +245,10 @@ async def apply_code(req: CodeApplyRequest):
     ext = EXT_BY_LANG.get(lang, ".txt")
     safe_title = re.sub(r"[^A-Za-z0-9._-]", "_", doc.get("title", "snippet"))[:60]
     fname = f"{doc['id'][:8]}__{safe_title}{ext}"
-    path = GROWN_CODE_DIR / fname
+    path = grown_code_dir() / fname
     bytes_written = 0
     try:
-        GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
+        grown_code_dir()
         path.write_text(doc.get("code", ""), encoding="utf-8")
         bytes_written = path.stat().st_size
     except Exception:

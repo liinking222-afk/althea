@@ -21,7 +21,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from core import db
+from core import current_tenant, db
 from models import Memory
 from routers.web_access import web_search, fetch_readable
 
@@ -38,7 +38,7 @@ STOP = set(
     "have has had between within across per via one two three new used using".split()
 )
 
-_engine: Optional["ResearchEngine"] = None
+_engines: dict = {}
 
 
 # ---------------------------------------------------------------- helpers
@@ -300,10 +300,11 @@ class ResearchEngine:
 
 
 def get_engine() -> ResearchEngine:
-    global _engine
-    if _engine is None:
-        _engine = ResearchEngine()
-    return _engine
+    """One in-flight tracker per tenant — each user's Althea researches alone."""
+    key = current_tenant()
+    if key not in _engines:
+        _engines[key] = ResearchEngine()
+    return _engines[key]
 
 
 async def research_and_summarize(query: str, timeout: float = 30.0) -> dict:

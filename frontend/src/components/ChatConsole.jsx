@@ -1509,7 +1509,7 @@ const ChatConsole = ({
                 <div className="flex items-center gap-2">
                     <div className="dot" />
                     <h2 className="heading text-sm tracking-widest uppercase">
-                        terminal // althea
+                        terminal // your althea
                     </h2>
                     <span
                         className="label text-[9px] text-[#666]"
@@ -1638,12 +1638,11 @@ const ChatConsole = ({
                 data-testid="terminal-quick-actions"
             >
                 {[
-                    ["letter", "/letter "],
-                    ["blueprint", "/blueprint "],
-                    ["plot", "plot "],
-                    ["web", "/web "],
-                    ["decode", "/decode focus"],
                     ["imagine", "/imagine "],
+                    ["plot", "plot "],
+                    ["letter", "/letter "],
+                    ["evolve", "/evolve "],
+                    ["memory", "/memory "],
                 ].map(([label, fill]) => (
                     <button
                         key={label}
@@ -1697,7 +1696,7 @@ const ChatConsole = ({
                             }
                             onKeyDown(e);
                         }}
-                        placeholder="speak to althea. try /help · /diagnose · /grow · ↑↓ history · Tab complete · Shift+Enter newline"
+                        placeholder="speak to your althea. /help for commands · ↑↓ history · Tab complete · Shift+Enter newline"
                         rows={3}
                         className="w-full bg-transparent outline-none text-sm md:text-[15px] font-mono text-white placeholder:text-[#444] relative z-10 resize-none leading-relaxed py-1"
                         style={{

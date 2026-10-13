@@ -20,7 +20,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from core import db, EMERGENT_LLM_KEY
+from core import EMERGENT_LLM_KEY, db, grown_code_dir
 from evolution_upgrades import (
     BASE_WEIGHTS,
     GROWTH_VECTORS,
@@ -40,11 +40,6 @@ from routers.notifications import emit_notification
 
 router = APIRouter()
 
-GROWN_CODE_DIR = Path("/app/althea_grown_code")
-try:
-    GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
-except Exception:
-    logging.warning("could not create %s — evolution writes will be skipped", GROWN_CODE_DIR)
 
 AUTO_EVOLUTION_COOLDOWN_SECONDS = 30
 MAX_AUTO_EVOLUTION_PER_HOUR = 60
@@ -256,7 +251,7 @@ async def _verification_inputs(vector: str) -> dict:
         return {"prompts": prompts} if len(prompts) >= 20 else {}
     if vector == "SYNTHESIS":
         mods = []
-        for p in sorted(GROWN_CODE_DIR.glob("*.py")):
+        for p in sorted(grown_code_dir().glob("*.py")):
             is_v2 = "__" in p.stem and p.stem.split("__", 1)[1] in TEMPLATES
             if not (p.stem.startswith("autonomous-") or is_v2):
                 continue
@@ -297,7 +292,7 @@ async def forge_upgrade(vector: str, archetype: str, upgrade_id: str, cycle_numb
     if not (scan["safe"] and syntax_ok):
         result["verification"]["checks"].append({"name": "safe-scan + syntax", "passed": False})
         return result
-    path = GROWN_CODE_DIR / f"evo-{cycle_number:04d}__{meta['module']}.py"
+    path = grown_code_dir() / f"evo-{cycle_number:04d}__{meta['module']}.py"
     path.write_text(code, encoding="utf-8")
     result["path"] = str(path)
     t0 = time.time()

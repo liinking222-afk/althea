@@ -3,25 +3,8 @@
 
 // Static slash commands. Grown capability slugs are merged at runtime.
 export const STATIC_SLASH = [
-    "/help", "/banner", "/clear", "/status", "/diagnose", "/troubleshoot", "/repair", "/consolidate",
-    "/workers", "/cores", "/sweep", "/kick", "/synthesize", "/autosynth", "/gaps",
-    "/web", "/search", "/fetch", "/uplink", "/neural", "/bci", "/decode",
-    "/letter", "/blueprint", "/track", "/specialize", "/mode", "/pilot", "/research",
-    "/imagine", "/draw", "/visualize", "/capabilities", "/system",
-    "/memory", "/remember", "/forget", "/clear-memory",
-    "/recall", "/concepts",
-    "/watch", "/stop-watch", "/suggest",
-    "/think", "/threads", "/stop-thread",
-    "/spawn", "/lattice",
-    "/perceive", "/forget-perception", "/learn", "/bridge",
-    "/export-brain", "/speak",
-    "/grow", "/grown", "/cull", "/run",
-    "/upload", "/files", "/open", "/download",
-    "/browse", "/server", "/sat", "/notif",
-    "/code", "/code-apply", "/code-list",
-    "/zoom",
-    "/evolve", "/vectors", "/version", "/cycles", "/master",
-    "/quantum", "/qstatus", "/qwipe",
+    "/help", "/clear", "/mode", "/memory", "/introspect", "/evolve", "/vectors",
+    "/cycles", "/version", "/imagine", "/letter", "/notif", "/research", "/grow", "/diagnose",
 ];
 
 export const ASCII_BANNER = `
@@ -109,90 +92,28 @@ export const TAG_COLOR = {
 };
 
 export const HELP_TEXT =
-    "[CMD-INDEX]\n" +
-    "── core ─────────────────────────────────\n" +
-    "/help              this menu\n" +
-    "/banner            ascii banner\n" +
-    "/status            full system report\n" +
-    "/diagnose          run self-troubleshoot battery\n" +
-    "/repair            apply safe self-repair actions\n" +
-    "/consolidate [n]   fold old memories into summaries (keep n recent)\n" +
-    "/workers           show the 8-core worker mesh state\n" +
-    "/sweep             fire every worker core once in parallel\n" +
-    "/kick <id>         tick one core immediately (cog/per/evo/gro/lat/net/diag/code)\n" +
-    "/synthesize        detect a capability gap in dialogue & grow it (add 'force' to skip check)\n" +
-    "/gaps              preview which capability gaps recent dialogue exposes\n" +
-    "/imagine <prompt>  ask gemini to draw an image inline (math, physics, diagrams)\n" +
-    "/web <query>       live keyless internet search (uplink)\n" +
-    "/fetch <url>       fetch + read any live web page\n" +
-    "/uplink            probe internet connectivity\n" +
-    "/neural            show ANIP/1.0 BCI protocol descriptor\n" +
-    "/decode [state]    acquire synthetic EEG and decode it (rest|focus|drowsy|motor-left|motor-right)\n" +
-    "/letter <purpose>  forge a formal letter rendered as paper (copy + download)\n" +
-    "/blueprint <thing> forge an engineering blueprint sheet (schematic + specs)\n" +
-    "/track [sat] [@lat,lon]  live TLE fetch + SGP4 orbit propagation (default ISS, Greenwich)\n" +
-    "/specialize [domain]  run the 4-stage transfer-learning pipeline (pretrain→freeze→head→fine-tune)\n" +
-    "/mode [direct|hybrid]  direct = ZERO-LLM live-internet answers (0 credits) · hybrid = LLM + uplink\n" +
-    "/pilot <goal>      autopilot — althea drives the real browser herself (watch in BROWSER → DRIVE)\n" +
-    "/research <topic>  spawn a parallel research thread (cross-refs sources, grows concept graph)\n" +
-    "/clear             wipe terminal scrollback\n" +
-    "/capabilities      list all subsystems\n" +
-    "/zoom in|out|reset zoom neural lattice\n" +
-    "── memory ───────────────────────────────\n" +
-    "/memory            list stored memories\n" +
-    "/remember <txt>    pin a memory\n" +
-    "/forget <id>       drop one memory\n" +
-    "/clear-memory      wipe all memories\n" +
-    "/recall <q>        semantic search\n" +
-    "/concepts          memory cluster tags\n" +
-    "── perception / browser ─────────────────\n" +
-    "/watch <url>       observe a page/video\n" +
-    "/stop-watch        clear viewport\n" +
-    "/suggest           althea picks what to watch\n" +
-    "/browse <url>      althea surfs the web headless\n" +
-    "── files ────────────────────────────────\n" +
-    "/upload            attach a file (≤2MB)\n" +
-    "/files             list attached files\n" +
-    "/open <id>         read a file in terminal\n" +
-    "/download <id>     download a stored file\n" +
-    "── cognition ────────────────────────────\n" +
-    "/think <focus>     spawn cognition thread\n" +
-    "/threads           list active threads\n" +
-    "/stop-thread <id>  halt a thread\n" +
-    "── lattice ──────────────────────────────\n" +
-    "/spawn <ctx>       spawn cognitive node\n" +
-    "/lattice           lattice state\n" +
-    "/perceive M:E      register peripheral\n" +
-    "/forget-perception <M>\n" +
-    "/learn <stream>    pattern extraction\n" +
-    "/bridge <ip> [p]   gated remote node\n" +
-    "── server / satellite ───────────────────\n" +
-    "/server <host> [proto] [port]   probe a server\n" +
-    "/sat                            satellite mesh stats\n" +
-    "── self-code ────────────────────────────\n" +
-    "/code <intent>     althea writes code\n" +
-    "/code-list         list snippets\n" +
-    "/code-apply <id>   persist snippet to disk\n" +
-    "── infinite growth ──────────────────────\n" +
-    "/grow [hint]       invent a new faculty NOW\n" +
-    "/grown             list grown faculties\n" +
-    "/cull <slug>       prune a faculty\n" +
-    "/run <slug> <args> invoke a grown faculty\n" +
-    "/<grown-slug> <args>  shortcut for /run\n" +
-    "── evolution engine AEE/2.0 (self-directed) ─\n" +
-    "/evolve [vector|lens] [hint]  self-upgrade now (vector forces target)\n" +
-    "/vectors           live self-assessment of 8 growth vectors\n" +
-    "/version           current self-version\n" +
-    "/cycles            upgrade timeline\n" +
-    "/master <archetype> forge a cycle through a master-coder lens\n" +
-    "── quantum mind os ──────────────────────\n" +
-    "/quantum <input>   collapse plan/reason/critic superposition\n" +
-    "/qstatus           quantum brain status\n" +
-    "/qwipe             reset quantum memory lattice\n" +
-    "── i/o ──────────────────────────────────\n" +
-    "/notif             open notification deck\n" +
-    "/export-brain      download snapshot\n" +
-    "/speak on|off      toggle voice output";
+    "ALTHEA // your private mind — commands\n" +
+    "── talk ────────────────────────────────\n" +
+    "just type            converse with your althea\n" +
+    "/mode direct|hybrid  zero-LLM local cognition vs hybrid\n" +
+    "/imagine <prompt>    generate an image\n" +
+    "/letter <topic>      draft a letter / document\n" +
+    "plot <expression>    render a chart\n" +
+    "── mind ────────────────────────────────\n" +
+    "/memory [query]      open your memory drawer\n" +
+    "/introspect          live self-state readout\n" +
+    "/research <topic>    spawn an autonomous research thread\n" +
+    "/grow                synthesize a capability for a detected gap\n" +
+    "/diagnose            self-diagnostics\n" +
+    "── evolution engine AEE/2.0 ────────────\n" +
+    "/evolve [vector]     self-upgrade now (vector forces target)\n" +
+    "/vectors             live self-assessment of 8 growth vectors\n" +
+    "/cycles · /version   upgrade timeline · current self-version\n" +
+    "── people ──────────────────────────────\n" +
+    "open a direct line from the right panel — one shared althea joins you both;\n" +
+    "mention @althea in that chat to call her, or use her terminal beside yours.\n" +
+    "── misc ────────────────────────────────\n" +
+    "/notif · /clear      notifications · clear screen";
 
 export const getMessageTag = (content) => {
     const m = (content || "").match(/^\s*\[([A-Z][A-Z0-9\-_/]*)/);

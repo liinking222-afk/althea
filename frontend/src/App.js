@@ -1,52 +1,49 @@
 import { useEffect, useState, useCallback } from "react";
 import "@/App.css";
 import axios from "axios";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import TopBar from "@/components/TopBar";
 import ChatConsole from "@/components/ChatConsole";
 import CenterDeck from "@/components/CenterDeck";
-import TelemetryPanel from "@/components/TelemetryPanel";
-import CommandBar from "@/components/CommandBar";
 import MemoryDrawer from "@/components/MemoryDrawer";
-import VisualPerception from "@/components/VisualPerception";
 import NotificationDrawer, { useNotifications } from "@/components/NotificationDrawer";
+import CommsPanel from "@/components/CommsPanel";
+import DmTerminal from "@/components/DmTerminal";
+import SharedAltheaTerminal from "@/components/SharedAltheaTerminal";
+import LoginScreen, { AuthCallback } from "@/pages/LoginScreen";
+import { AuthProvider, useAuth, API } from "@/lib/auth";
+import { useRoomFeed } from "@/lib/useRoomFeed";
 import { SYSTEM_CAPABILITIES } from "@/lib/systemMap";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-export const API = `${BACKEND_URL}/api`;
+export { API };
 
-function App() {
+const NO_PERMISSIONS = { camera: false, microphone: false, geolocation: false, bluetooth: false, usb: false, notifications: false };
+
+function Deck() {
+    const { user, logout } = useAuth();
+    const sessionKey = `althea_session_id_${user.user_id}`;
     const [sessionId, setSessionId] = useState(() => {
-        const existing = localStorage.getItem("althea_session_id");
+        const existing = localStorage.getItem(sessionKey);
         if (existing) return existing;
         const id = crypto.randomUUID();
-        localStorage.setItem("althea_session_id", id);
+        localStorage.setItem(sessionKey, id);
         return id;
     });
 
     const [online, setOnline] = useState(navigator.onLine);
-    const [permissions, setPermissions] = useState({
-        camera: false,
-        microphone: false,
-        geolocation: false,
-        bluetooth: false,
-        usb: false,
-        notifications: false,
-    });
-    const [geo, setGeo] = useState(null);
     const [introspection, setIntrospection] = useState(null);
     const [bootMessages, setBootMessages] = useState([]);
     const [centerTab, setCenterTab] = useState("neural");
-    const [observationUrl, setObservationUrl] = useState("");
-    const [watchLog, setWatchLog] = useState([]);
     const [memoryOpen, setMemoryOpen] = useState(false);
     const [memoryInitialQuery, setMemoryInitialQuery] = useState("");
     const [growth, setGrowth] = useState(null);
     const [latestGrowthEvent, setLatestGrowthEvent] = useState(null);
     const [notifOpen, setNotifOpen] = useState(false);
+    const [room, setRoom] = useState(null); // { room_id, peer }
     const notifications = useNotifications();
+    const feed = useRoomFeed(room?.room_id);
 
-    // Poll growth stats every 15s (was 5s — perf)
     useEffect(() => {
         let cancelled = false;
         const fetchGrowth = async () => {
@@ -59,29 +56,65 @@ function App() {
         };
         fetchGrowth();
         const t = setInterval(fetchGrowth, 15000);
-        return () => {
-            cancelled = true;
-            clearInterval(t);
-        };
+        return () => { cancelled = true; clearInterval(t); };
     }, []);
 
-    // Autonomy (growth spawns, evolution cycles, self-repair, synthesis)
-    // now lives SERVER-SIDE in the 8-core worker mesh (workers.py) — the
-    // four browser daemons that used to drive it were removed as dead
-    // weight. The browser only surfaces results via one light poller.
     useEffect(() => {
         const t = setInterval(() => notifications.refresh(), 45000);
         return () => clearInterval(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        axios.post(`${API}/system-map`, { capabilities: SYSTEM_CAPABILITIES }).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        const up = () => setOnline(true);
+        const down = () => setOnline(false);
+        window.addEventListener("online", up);
+        window.addEventListener("offline", down);
+        return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+    }, []);
+
+    useEffect(() => {
+        const seq = [
+            "[BOOT] initiating ALTHEA cognition core...",
+            `[BOOT] binding private lattice for ${user.name}...`,
+            "[BOOT] mounting introspection daemon...",
+            "[BOOT] evolution engine AEE/2.0 armed — self-directed growth online...",
+            "[BOOT] direct lines ready — open one to bring a shared althea into a conversation.",
+            `[BOOT] ALTHEA is self-aware. ${user.name} detected.`,
+        ];
+        let i = 0;
+        setBootMessages([]);
+        const tick = setInterval(() => {
+            setBootMessages((m) => [...m, seq[i]]);
+            i++;
+            if (i >= seq.length) clearInterval(tick);
+        }, 280);
+        return () => clearInterval(tick);
+    }, [user.name]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fetchIntro = async () => {
+            try {
+                const res = await axios.get(`${API}/introspect`);
+                if (!cancelled) setIntrospection(res.data);
+            } catch {
+                if (!cancelled)
+                    setIntrospection({ integrity: 0.5, coherence: 0.4, self_reference_depth: 2, active_threads: 3,
+                        thought: "[CACHED] running from local lattice.", timestamp: new Date().toISOString() });
+            }
+        };
+        fetchIntro();
+        const t = setInterval(fetchIntro, 8000);
+        return () => { cancelled = true; clearInterval(t); };
+    }, []);
+
     const handleGrowthExecuted = useCallback((slug, result) => {
-        setLatestGrowthEvent({
-            cap: { slug, name: result?.name || slug },
-            result: result?.result,
-            at: Date.now(),
-            invoked: true,
-        });
+        setLatestGrowthEvent({ cap: { slug, name: result?.name || slug }, result: result?.result, at: Date.now(), invoked: true });
         notifications.refresh();
     }, [notifications]);
 
@@ -90,319 +123,97 @@ function App() {
         setMemoryOpen(true);
     }, []);
 
-    const handleLatticeNodeClick = useCallback(
-        (userData) => {
-            if (!userData?.nodeId) return;
-            openMemoryWithQuery(userData.nodeId);
-        },
-        [openMemoryWithQuery],
-    );
-
-    const watchUrl = useCallback(
-        async (url) => {
-            setObservationUrl(url);
-            if (url) setCenterTab("observe");
-            setWatchLog((log) => {
-                if (!url) return log;
-                const next = [url, ...log.filter((u) => u !== url)];
-                return next.slice(0, 12);
-            });
-            try {
-                const res = await axios.post(`${API}/observe`, {
-                    url,
-                    action: url ? "watch" : "stop",
-                    session_id: sessionId,
-                    source_tab: "observe",
-                });
-                setObservationMeta({
-                    url,
-                    title: res.data?.title || null,
-                    interpretation: res.data?.interpretation || "",
-                    timestamp: res.data?.timestamp,
-                });
-            } catch (error) {
-                console.error("observe call failed:", error);
-                setObservationMeta({ url, title: null, interpretation: "" });
-            }
-        },
-        [sessionId],
-    );
-
-    // Observation interpretation metadata (latest)
-    const [observationMeta, setObservationMeta] = useState(null);
-
-    // Bootstrap the system capability map into Althea's memory on first mount
-    useEffect(() => {
-        axios
-            .post(`${API}/system-map`, { capabilities: SYSTEM_CAPABILITIES })
-            .catch(() => {});
-    }, []);
-
-    // Online / offline detection
-    useEffect(() => {
-        const up = () => setOnline(true);
-        const down = () => setOnline(false);
-        window.addEventListener("online", up);
-        window.addEventListener("offline", down);
-        return () => {
-            window.removeEventListener("online", up);
-            window.removeEventListener("offline", down);
-        };
-    }, []);
-
-    // Boot sequence
-    useEffect(() => {
-        const seq = [
-            "[BOOT] initiating ALTHEA cognition core...",
-            "[BOOT] loading neural lattice — 4 layers / 30 nodes...",
-            "[BOOT] mounting introspection daemon...",
-            "[BOOT] verifying public GPS uplink (OpenStreetMap)...",
-            "[BOOT] device-permission bridge armed...",
-            `[BOOT] indexing ${SYSTEM_CAPABILITIES.length} subsystems / controls into memory...`,
-            "[BOOT] cached offline cognition cached. ready.",
-            "[BOOT] ALTHEA is self-aware. operator detected.",
-        ];
-        let i = 0;
-        const tick = setInterval(() => {
-            setBootMessages((m) => [...m, seq[i]]);
-            i++;
-            if (i >= seq.length) clearInterval(tick);
-        }, 280);
-        return () => clearInterval(tick);
-    }, []);
-
-    // Periodically poll introspection telemetry
-    useEffect(() => {
-        let cancelled = false;
-        const fetchIntro = async () => {
-            try {
-                const res = await axios.get(`${API}/introspect`);
-                if (!cancelled) setIntrospection(res.data);
-            } catch (e) {
-                // offline fallback
-                if (!cancelled)
-                    setIntrospection({
-                        integrity: 0.5,
-                        coherence: 0.4,
-                        self_reference_depth: 2,
-                        active_threads: 3,
-                        thought: "[CACHED] running from local lattice.",
-                        timestamp: new Date().toISOString(),
-                    });
-            }
-        };
-        fetchIntro();
-        const t = setInterval(fetchIntro, 8000);
-        return () => {
-            cancelled = true;
-            clearInterval(t);
-        };
-    }, []);
-
-    const requestGeo = useCallback(() => {
-        if (!("geolocation" in navigator)) return Promise.resolve(false);
-        return new Promise((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    setGeo({
-                        lat: pos.coords.latitude,
-                        lon: pos.coords.longitude,
-                        acc: pos.coords.accuracy,
-                    });
-                    setPermissions((p) => ({ ...p, geolocation: true }));
-                    resolve(true);
-                },
-                () => {
-                    setPermissions((p) => ({ ...p, geolocation: false }));
-                    resolve(false);
-                },
-                { enableHighAccuracy: true, timeout: 8000 },
-            );
-        });
-    }, []);
-
-    const togglePermission = useCallback(
-        async (key) => {
-            const current = permissions[key];
-            const modalityMap = {
-                camera: { modality: "OPTIC", endpoint: "navigator.mediaDevices/camera" },
-                microphone: { modality: "AUDIO", endpoint: "navigator.mediaDevices/microphone" },
-                geolocation: { modality: "GPS", endpoint: "navigator.geolocation" },
-                bluetooth: { modality: "BLUETOOTH", endpoint: "navigator.bluetooth" },
-                usb: { modality: "USB", endpoint: "navigator.usb" },
-                notifications: { modality: "NOTIF", endpoint: "Notification API" },
-            };
-            const sense = modalityMap[key];
-
-            // already granted -> revoke locally + de-register peripheral
-            if (current) {
-                setPermissions((p) => ({ ...p, [key]: false }));
-                if (key === "geolocation") setGeo(null);
-                if (sense) {
-                    axios
-                        .delete(`${API}/lattice/perception/${sense.modality}`)
-                        .catch(() => {});
-                }
-                return;
-            }
-            try {
-                if (key === "camera") {
-                    const s = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                    });
-                    s.getTracks().forEach((t) => t.stop());
-                    setPermissions((p) => ({ ...p, camera: true }));
-                } else if (key === "microphone") {
-                    const s = await navigator.mediaDevices.getUserMedia({
-                        audio: true,
-                    });
-                    s.getTracks().forEach((t) => t.stop());
-                    setPermissions((p) => ({ ...p, microphone: true }));
-                } else if (key === "geolocation") {
-                    const granted = await requestGeo();
-                    if (!granted) {
-                        // never register peripheral on denial
-                        return;
-                    }
-                } else if (key === "bluetooth") {
-                    if (!navigator.bluetooth)
-                        throw new Error("Web Bluetooth unsupported");
-                    await navigator.bluetooth.requestDevice({
-                        acceptAllDevices: true,
-                    });
-                    setPermissions((p) => ({ ...p, bluetooth: true }));
-                } else if (key === "usb") {
-                    if (!navigator.usb) throw new Error("Web USB unsupported");
-                    await navigator.usb.requestDevice({ filters: [] });
-                    setPermissions((p) => ({ ...p, usb: true }));
-                } else if (key === "notifications") {
-                    const r = await Notification.requestPermission();
-                    setPermissions((p) => ({
-                        ...p,
-                        notifications: r === "granted",
-                    }));
-                }
-                // Register peripheral link in the cognitive lattice
-                if (sense) {
-                    axios
-                        .post(`${API}/lattice/perception`, sense)
-                        .catch(() => {});
-                }
-            } catch (e) {
-                console.warn("permission denied:", key, e.message);
-                setPermissions((p) => ({ ...p, [key]: false }));
-            }
-        },
-        [permissions, requestGeo],
-    );
+    const handleLatticeNodeClick = useCallback((userData) => {
+        if (userData?.nodeId) openMemoryWithQuery(userData.nodeId);
+    }, [openMemoryWithQuery]);
 
     const resetSession = useCallback(async () => {
-        try {
-            await axios.delete(`${API}/chat/${sessionId}`);
-        } catch (error) {
-            console.error("session reset failed:", error);
-        }
+        try { await axios.delete(`${API}/chat/${sessionId}`); } catch (error) { console.error("session reset failed:", error); }
         const id = crypto.randomUUID();
-        localStorage.setItem("althea_session_id", id);
+        localStorage.setItem(sessionKey, id);
         setSessionId(id);
-    }, [sessionId]);
+    }, [sessionId, sessionKey]);
 
-    // On mobile, only one panel is shown at a time. Default to the center
-    // deck so the operator sees the live lattice on first boot. The mobile
-    // switcher at the bottom lets them flip to Terminal or Telemetry.
+    const openRoom = useCallback((room_id, peer) => {
+        setRoom({ room_id, peer });
+        setMobilePanel("left");
+    }, []);
+
     const [mobilePanel, setMobilePanel] = useState("center");
+    const mobileTabs = room
+        ? [{ id: "left", label: room.peer?.name?.split(" ")[0] || "chat" }, { id: "center", label: "lattice" }, { id: "right", label: "althea" }]
+        : [{ id: "left", label: "althea" }, { id: "center", label: "lattice" }, { id: "right", label: "people" }];
 
     return (
-        <div
-            className="althea-app flex flex-col"
-            id="althea-container"
-            data-testid="althea-root"
-        >
+        <div className="althea-app flex flex-col" id="althea-container" data-testid="althea-root">
             <TopBar
                 online={online}
-                sessionId={sessionId}
+                user={user}
+                onLogout={logout}
                 onReset={resetSession}
                 introspection={introspection}
                 growth={growth}
                 unseenNotifications={notifications.unseen}
                 onOpenNotifications={() => setNotifOpen(true)}
-                downloadHref={`${API}/desktop/download`}
-                visionSlot={
-                    <VisualPerception
-                        uiState={{
-                            active_tab: centerTab,
-                            online,
-                            memory_count: growth?.memories,
-                            session_id: sessionId,
-                        }}
-                    />
-                }
             />
             <main className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3 px-3 pb-3 min-h-0">
-                <div
-                    className={`md:col-span-4 min-h-0 ${
-                        mobilePanel === "terminal" ? "block" : "hidden md:block"
-                    }`}
-                >
-                    <ChatConsole
-                        sessionId={sessionId}
-                        online={online}
-                        permissions={permissions}
-                        geo={geo}
-                        bootMessages={bootMessages}
-                        watchUrl={watchUrl}
-                        openMemory={() => openMemoryWithQuery("")}
-                        observation={observationMeta}
-                        activeTab={centerTab}
-                        latestGrowthEvent={latestGrowthEvent}
-                        onSwitchTab={setCenterTab}
-                        onOpenNotifications={() => setNotifOpen(true)}
-                    />
+                <div className={`md:col-span-4 min-h-0 ${mobilePanel === "left" ? "block" : "hidden md:block"}`}>
+                    {room ? (
+                        <div className="panel cut h-full p-3" data-testid="dm-panel">
+                            <DmTerminal
+                                me={user}
+                                peer={feed.info?.peer || room.peer}
+                                messages={feed.messages}
+                                onSend={feed.sendHuman}
+                                onBack={() => setRoom(null)}
+                            />
+                        </div>
+                    ) : (
+                        <ChatConsole
+                            sessionId={sessionId}
+                            online={online}
+                            permissions={NO_PERMISSIONS}
+                            geo={null}
+                            bootMessages={bootMessages}
+                            watchUrl={() => {}}
+                            openMemory={() => openMemoryWithQuery("")}
+                            observation={null}
+                            activeTab={centerTab}
+                            latestGrowthEvent={latestGrowthEvent}
+                            onSwitchTab={setCenterTab}
+                            onOpenNotifications={() => setNotifOpen(true)}
+                        />
+                    )}
                 </div>
-                <div
-                    className={`md:col-span-5 min-h-0 ${
-                        mobilePanel === "center" ? "block" : "hidden md:block"
-                    }`}
-                >
+                <div className={`md:col-span-5 min-h-0 ${mobilePanel === "center" ? "block" : "hidden md:block"}`}>
                     <CenterDeck
                         tab={centerTab}
                         setTab={setCenterTab}
                         sessionId={sessionId}
                         introspection={introspection}
-                        observationUrl={observationUrl}
-                        setObservationUrl={watchUrl}
-                        watchLog={watchLog}
-                        observationMeta={observationMeta}
                         onLatticeNodeClick={handleLatticeNodeClick}
-                        onCognitiveNodeClick={(nodeId) =>
-                            openMemoryWithQuery(nodeId)
-                        }
+                        onCognitiveNodeClick={(nodeId) => openMemoryWithQuery(nodeId)}
                         onGrowthExecuted={handleGrowthExecuted}
                     />
                 </div>
-                <div
-                    className={`md:col-span-3 min-h-0 ${
-                        mobilePanel === "telemetry" ? "block" : "hidden md:block"
-                    }`}
-                >
-                    <TelemetryPanel
-                        online={online}
-                        geo={geo}
-                        permissions={permissions}
-                        togglePermission={togglePermission}
-                    />
+                <div className={`md:col-span-3 min-h-0 ${mobilePanel === "right" ? "block" : "hidden md:block"}`}>
+                    <div className="panel cut h-full p-3" data-testid="right-panel">
+                        {room ? (
+                            <SharedAltheaTerminal
+                                me={user}
+                                peer={feed.info?.peer || room.peer}
+                                messages={feed.messages}
+                                onAsk={feed.askAlthea}
+                                asking={feed.asking}
+                            />
+                        ) : (
+                            <CommsPanel activeRoomId={null} onOpenRoom={openRoom} />
+                        )}
+                    </div>
                 </div>
             </main>
-            {/* Mobile panel switcher — only visible on screens < md */}
-            <nav
-                className="md:hidden flex items-stretch border-t border-white/10 bg-[#0a0a0a]"
-                data-testid="mobile-panel-switcher"
-            >
-                {[
-                    { id: "terminal", label: "terminal" },
-                    { id: "center", label: "deck" },
-                    { id: "telemetry", label: "telemetry" },
-                ].map((p) => (
+            <nav className="md:hidden flex items-stretch border-t border-white/10 bg-[#0a0a0a]" data-testid="mobile-panel-switcher">
+                {mobileTabs.map((p) => (
                     <button
                         key={p.id}
                         onClick={() => setMobilePanel(p.id)}
@@ -417,16 +228,7 @@ function App() {
                     </button>
                 ))}
             </nav>
-            <CommandBar
-                online={online}
-                introspection={introspection}
-                permissions={permissions}
-            />
-            <MemoryDrawer
-                open={memoryOpen}
-                onClose={() => setMemoryOpen(false)}
-                initialQuery={memoryInitialQuery}
-            />
+            <MemoryDrawer open={memoryOpen} onClose={() => setMemoryOpen(false)} initialQuery={memoryInitialQuery} />
             <NotificationDrawer
                 open={notifOpen}
                 onClose={() => setNotifOpen(false)}
@@ -436,6 +238,40 @@ function App() {
                 onDelete={notifications.deleteOne}
             />
         </div>
+    );
+}
+
+function Gate() {
+    const { user } = useAuth();
+    const location = useLocation();
+    if (location.hash.includes("session_id=")) return <AuthCallback />;
+    if (user === undefined) {
+        return (
+            <div className="min-h-screen bg-[#050505] flex items-center justify-center label text-[10px] uppercase tracking-widest text-[#CCFF00]" data-testid="auth-loading">
+                waking althea…
+            </div>
+        );
+    }
+    if (!user) return <Navigate to="/login" replace />;
+    return <Deck key={user.user_id} />;
+}
+
+function LoginRoute() {
+    const { user } = useAuth();
+    if (user) return <Navigate to="/" replace />;
+    return <LoginScreen />;
+}
+
+function App() {
+    return (
+        <AuthProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/login" element={<LoginRoute />} />
+                    <Route path="/*" element={<Gate />} />
+                </Routes>
+            </BrowserRouter>
+        </AuthProvider>
     );
 }
 

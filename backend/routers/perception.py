@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from core import db
+from core import current_tenant, db
 from models import CognitiveNode, Memory
 from utils import next_node_id
 
@@ -16,7 +16,7 @@ router = APIRouter()
 # In-process TTL cache for /growth/stats — frontend polls every 5s,
 # 9 count_documents per call is wasteful on Atlas. 4s TTL keeps the UI
 # fresh while collapsing the hottest endpoint to ~12 queries/min instead of ~108.
-_STATS_CACHE = {"at": 0.0, "data": None}
+_STATS_CACHE: dict = {}  # tenant -> {"at", "data"}
 _STATS_TTL = 4.0
 
 
@@ -114,8 +114,9 @@ async def growth_stats():
     """Real-time aggregate counts — what Althea has accumulated.
     Cached in-process for ~4s to keep Atlas roundtrips bounded under heavy UI polling."""
     now = time.time()
-    if _STATS_CACHE["data"] and (now - _STATS_CACHE["at"]) < _STATS_TTL:
-        return _STATS_CACHE["data"]
+    cached = _STATS_CACHE.get(current_tenant())
+    if cached and (now - cached["at"]) < _STATS_TTL:
+        return cached["data"]
 
     data = {
         "memories": await db.althea_memories.count_documents({}),
@@ -130,6 +131,5 @@ async def growth_stats():
         "evolution_cycles": await db.althea_cycles.count_documents({}),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    _STATS_CACHE["data"] = data
-    _STATS_CACHE["at"] = now
+    _STATS_CACHE[current_tenant()] = {"data": data, "at": now}
     return data

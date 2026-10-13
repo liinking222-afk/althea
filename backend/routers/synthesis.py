@@ -21,7 +21,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from core import db, EMERGENT_LLM_KEY, is_budget_exceeded
+from core import EMERGENT_LLM_KEY, db, grown_code_dir, is_budget_exceeded
 from local_core import safe_code_scan, sanitize_reply
 from models import CognitiveNode, GrownCapability, Memory
 from routers.notifications import emit_notification
@@ -29,7 +29,6 @@ from utils import next_node_id
 
 router = APIRouter()
 
-GROWN_CODE_DIR = Path("/app/althea_grown_code")
 
 # Phrases in dialogue that signal a capability gap.
 GAP_SIGNALS = [
@@ -728,8 +727,8 @@ async def synthesize_capability_from_dialogue(
 
     # 5. Persist to disk (never executed — just loaded)
     try:
-        GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
-        applied_path = GROWN_CODE_DIR / f"{slug}.py"
+        grown_code_dir()
+        applied_path = grown_code_dir() / f"{slug}.py"
         applied_path.write_text(code, encoding="utf-8")
         steps.append({
             "stage": "EXEC",
@@ -855,7 +854,7 @@ INBAND_SIGNALS = [
 
 def _load_and_run(slug: str, args=None, kwargs=None) -> dict:
     """Load a synthesized module from disk (re-scanning it) and call run()."""
-    path = GROWN_CODE_DIR / f"{slug}.py"
+    path = grown_code_dir() / f"{slug}.py"
     if not path.exists():
         return {"ok": False, "error": "module_file_missing"}
     code = path.read_text(encoding="utf-8")
@@ -883,7 +882,7 @@ async def _ensure_capability(slug_prefix: str, category: str,
         {"_id": 0, "slug": 1},
     ).sort("timestamp", -1).to_list(5)
     for d in docs:
-        if (GROWN_CODE_DIR / f"{d['slug']}.py").exists():
+        if (grown_code_dir() / f"{d['slug']}.py").exists():
             return d["slug"]
     if docs:
         slug = docs[0]["slug"]
@@ -892,8 +891,8 @@ async def _ensure_capability(slug_prefix: str, category: str,
             category, "rematerialized for in-band invocation",
         )
         if safe_code_scan(code)["safe"]:
-            GROWN_CODE_DIR.mkdir(parents=True, exist_ok=True)
-            (GROWN_CODE_DIR / f"{slug}.py").write_text(code, encoding="utf-8")
+            grown_code_dir()
+            (grown_code_dir() / f"{slug}.py").write_text(code, encoding="utf-8")
             return slug
         return None
     res = await synthesize_capability_from_dialogue(
@@ -1310,7 +1309,7 @@ async def invoke_synthesized(req: InvokeRequest):
     if not doc:
         raise HTTPException(status_code=404, detail="capability_not_found")
 
-    path = GROWN_CODE_DIR / f"{req.slug}.py"
+    path = grown_code_dir() / f"{req.slug}.py"
     if not path.exists():
         raise HTTPException(status_code=404, detail="module_file_missing")
 

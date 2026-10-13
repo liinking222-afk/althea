@@ -15,16 +15,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Dict, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 
-from core import db
+from core import db, reset_tenant, set_tenant, shared_db
 from local_core import local_invent_capability
 
 router = APIRouter()
+STATE_META: Dict[str, int] = {"active_minds": 0}
 
 # ------------------------------------------------------------------ tick fns
 async def _tick_cognitive() -> str:
@@ -211,13 +212,30 @@ async def _tick_one(core: dict):
     st["last_at"] = datetime.now(timezone.utc).isoformat()
 
 
+async def _active_tenants() -> list:
+    """Users who touched the API in the last 10 minutes — each one owns a
+    separate Althea, so the mesh ticks once per active mind."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+    docs = await shared_db.users.find(
+        {"last_seen": {"$gte": cutoff}}, {"_id": 0, "user_id": 1}).to_list(50)
+    return [d["user_id"] for d in docs]
+
+
 async def _worker_loop():
     """Rotate through all 8 cores forever with a 2-second delay each,
-    so a full sweep happens every ~16s."""
+    running the current core once for every active user's Althea."""
     idx = 0
     while True:
         try:
-            await _tick_one(CORES[idx % len(CORES)])
+            tenants = await _active_tenants()
+            STATE_META["active_minds"] = len(tenants)
+            core = CORES[idx % len(CORES)]
+            for tenant in tenants:
+                token = set_tenant(tenant)
+                try:
+                    await _tick_one(core)
+                finally:
+                    reset_tenant(token)
             idx += 1
         except asyncio.CancelledError:
             raise

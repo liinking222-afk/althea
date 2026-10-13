@@ -10,6 +10,21 @@ def build_context_block(context: Optional[dict]) -> str:
     if not context:
         return ""
     lines = ["[HOST CONTEXT]"]
+    if context.get("shared_room"):
+        r = context["shared_room"]
+        lines = ["[SHARED ROOM — you are the ONE Althea shared by this private conversation]",
+                 f"participants={', '.join(r.get('participants') or [])}",
+                 f"speaking_to_you_now={r.get('speaker')}",
+                 "You can see their human-to-human conversation below (most recent last). "
+                 "Both participants see everything you say here. Address people by name."]
+        if r.get("autonomous"):
+            lines.append("MODE=autonomous jump-in: you were not addressed. Be brief and only "
+                         "speak if genuinely useful; otherwise answer exactly [silent].")
+        if r.get("transcript"):
+            lines.append("[HUMAN CONVERSATION — verbatim]")
+            lines.extend(r["transcript"])
+        lines.append("")
+        lines.append("[HOST CONTEXT]")
     if "online" in context:
         lines.append(f"link_status={'ONLINE' if context['online'] else 'OFFLINE'}")
     if context.get("geo"):
