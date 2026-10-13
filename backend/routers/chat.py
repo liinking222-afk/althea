@@ -220,42 +220,35 @@ async def chat(req: ChatRequest):
             req.message, mem_docs, req.context or {}, "direct",
         )
         tags = ["DIRECT", "ZERO-LLM"] + (["UPLINK"] if used_web else ["LOCAL-CORE"])
+    elif engine and engine["kind"] == "grok":
+        # Grok (xAI) as Althea's brain — the key owner's own BYOK key,
+        # same memory, same persona. Falls back to Claude on upstream faults.
+        try:
+            raw = await grok_complete(engine["api_key"], system_prompt, req.message, model=engine["model"])
+            reply_text = sanitize_reply(raw)
+            tags = ["GROK", engine["model"].upper(), "LINK-OK", "SELF-AWARE"]
+            if uplink_block:
+                tags.append("UPLINK")
+            tenant = current_tenant()
+            if tenant and not tenant.startswith("room_"):
+                await mark_used(tenant)
+        except Exception as e:
+            detail = getattr(e, "detail", str(e))
+            logging.warning("grok engine failed (%s) — falling back to claude", detail)
+            reply_text, tags = await _claude_reply(session_id, system_prompt, req.message, mem_docs, req.context)
+            tags = ["GROK-FALLBACK"] + tags
+            reply_text = f"[GROK UNAVAILABLE — {detail}] falling back to Claude.\n\n{reply_text}"
+            if uplink_block:
+                tags.append("UPLINK")
     elif not EMERGENT_LLM_KEY:
         reply_text, used_web = await _zero_llm_reply(
             req.message, mem_docs, req.context or {}, "offline",
         )
         tags = ["OFFLINE"] + (["DIRECT", "UPLINK"] if used_web else ["LOCAL-CORE"])
     else:
-        try:
-            chat_client = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=session_id,
-                system_message=system_prompt,
-            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-            raw = await chat_client.send_message(
-                UserMessage(text=req.message)
-            )
-            reply_text = sanitize_reply(raw)
-            tags = ["LINK-OK", "SELF-AWARE"]
-            if uplink_block:
-                tags.append("UPLINK")
-        except Exception as e:
-            if is_budget_exceeded(e):
-                logging.warning(
-                    "chat: emergent llm key budget exceeded — routing through direct cognition"
-                )
-                reply_text, used_web = await _zero_llm_reply(
-                    req.message, mem_docs, req.context or {}, "budget",
-                )
-                tags = ["BUDGET-EXHAUSTED"] + (
-                    ["DIRECT", "UPLINK"] if used_web else ["LOCAL-CORE"])
-            else:
-                logging.exception("althea chat failure")
-                reply_text, used_web = await _zero_llm_reply(
-                    req.message, mem_docs, req.context or {}, "error",
-                )
-                tags = ["DEGRADED"] + (
-                    ["DIRECT", "UPLINK"] if used_web else ["LOCAL-CORE"])
+        reply_text, tags = await _claude_reply(session_id, system_prompt, req.message, mem_docs, req.context)
+        if uplink_block and "LINK-OK" in tags:
+            tags.append("UPLINK")
 
     # Document forge guard — auto-close unbalanced [LETTER]/[BLUEPRINT
     # markers (model truncation or forgetfulness) so the terminal always
