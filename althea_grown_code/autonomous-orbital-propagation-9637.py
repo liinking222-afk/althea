@@ -1,6 +1,6 @@
 """AUTOSYNTH — Orbital Propagation
 Category: astronomy-navigation
-Generated: 2026-08-23T15:40:37.191541+00:00
+Generated: 2026-09-11T06:53:57.033086+00:00
 Rationale: Detected in recent dialogue: 'orbital-propagation' pattern surfaced multiple times.
 
 Executable capability wired into ALTHEA's lattice by
